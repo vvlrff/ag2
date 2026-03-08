@@ -15,16 +15,23 @@ from .annotations import Context
 from .config import LLMClient, ModelConfig
 from .events import (
     BaseEvent,
+    ClientToolCall,
     HumanInputRequest,
     ModelRequest,
     ModelResponse,
+    ToolCall,
+    ToolError,
+    ToolNotFoundEvent,
+    ToolResult,
     ToolResults,
 )
-from .exceptions import ConfigNotProvidedError
+from .events.conditions import ClassInfo, Condition
+from .exceptions import ConfigNotProvidedError, ToolNotFoundError
 from .history import History
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
+from .middleware import Middleware, _build_chain
 from .stream import MemoryStream, Stream
-from .tools import FunctionParameters, FunctionTool, Tool, ToolExecutor, tool
+from .tools import FunctionParameters, FunctionTool, Tool, tool
 
 if TYPE_CHECKING:
     from .conversable import ConversableAdapter
@@ -100,6 +107,7 @@ class Agent(Askable):
         config: ModelConfig | None = None,
         hitl_hook: HumanHook | None = None,
         tools: Iterable[Callable[..., Any] | Tool] = (),
+        middleware: Iterable[Middleware] = (),
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
     ):
@@ -113,7 +121,8 @@ class Agent(Askable):
         self.tools = [FunctionTool.ensure_tool(t, provider=self.dependency_provider) for t in tools]
 
         self.__hitl_hook = wrap_hitl(hitl_hook) if hitl_hook else default_hitl_hook
-        self.__tool_executor = ToolExecutor()
+        self._middleware: list[Middleware] = list(middleware)
+        self._observers: list[tuple[ClassInfo | Condition, Callable[..., Any]]] = []
 
         self._system_prompt: list[str] = []
         self._dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]] = []
@@ -210,6 +219,22 @@ class Agent(Askable):
 
         return make_tool
 
+    def on(self, event_type: type | Condition) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+        """Register a stream observer for an event type (non-interrupting).
+
+        Usage::
+
+            @agent.on(ModelResponse)
+            async def log_response(event: ModelResponse, ctx: Context):
+                print(f"Response: {event.message}")
+        """
+
+        def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
+            self._observers.append((event_type, func))
+            return func
+
+        return decorator
+
     async def ask(
         self,
         msg: str,
@@ -262,36 +287,92 @@ class Agent(Askable):
     ) -> "Conversation":
         all_tools = self.tools + list(additional_tools)
 
-        async def _call_client(event: BaseEvent, ctx: Context) -> None:
-            await client(
-                *await ctx.stream.history.get_events(),
-                ctx=ctx,
-                tools=all_tools,
-            )
-            return None
+        # --- Base operations (innermost layer) ---
+
+        async def base_llm_call(messages: list[BaseEvent], ctx: Context, tools: list[Tool]) -> ModelResponse:
+            async with ctx.stream.get(ModelResponse) as result:
+                await client(*messages, ctx=ctx, tools=tools)
+                return await result
+
+        async def base_tool_execute(tool_call: ToolCall, ctx: Context) -> ToolResult | ToolError | ClientToolCall:
+            if not any(t.name == tool_call.name for t in all_tools):
+                err = ToolNotFoundError(tool_call.name)
+                tool_error = ToolNotFoundEvent(
+                    parent_id=tool_call.id,
+                    name=tool_call.name,
+                    content=repr(err),
+                    error=err,
+                )
+                await ctx.send(tool_call)
+                await ctx.send(tool_error)
+                return tool_error
+
+            async with ctx.stream.get(
+                (ToolResult.parent_id == tool_call.id) | (ToolError.parent_id == tool_call.id) | ClientToolCall
+            ) as result:
+                await ctx.send(tool_call)
+                return await result
+
+        async def base_turn(request: BaseEvent, ctx: Context) -> ModelResponse:
+            await ctx.send(request)
+
+            messages = list(await ctx.stream.history.get_events())
+            response = await llm_call(messages, ctx, all_tools)
+
+            while response.tool_calls and not response.response_force:
+                results: list[ToolResult | ToolError] = []
+                client_calls: list[ClientToolCall] = []
+
+                for call in response.tool_calls.calls:
+                    result = await tool_execute(call, ctx)
+                    if isinstance(result, ClientToolCall):
+                        client_calls.append(result)
+                    else:
+                        results.append(result)
+
+                if client_calls:
+                    from .events import ToolCalls
+
+                    response = ModelResponse(
+                        tool_calls=ToolCalls(calls=client_calls),
+                        response_force=True,
+                    )
+                    await ctx.send(response)
+                else:
+                    await ctx.send(ToolResults(results=results))
+                    messages = list(await ctx.stream.history.get_events())
+                    response = await llm_call(messages, ctx, all_tools)
+
+            return response
+
+        # --- Build middleware chains ---
+
+        llm_call = _build_chain(self._middleware, "on_llm_call", base_llm_call)
+        tool_execute = _build_chain(self._middleware, "on_tool_execute", base_tool_execute)
+        turn = _build_chain(self._middleware, "on_turn", base_turn)
+
+        # --- Execute with stream subscribers ---
 
         with ExitStack() as stack:
-            stack.enter_context(
-                ctx.stream.where(ModelRequest | ToolResults).sub_scope(_call_client),
-            )
+            for tool_obj in all_tools:
+                tool_obj.register(stack, ctx)
 
             stack.enter_context(
                 ctx.stream.where(HumanInputRequest).sub_scope(self.__hitl_hook),
             )
 
-            self.__tool_executor.register(stack, ctx, tools=all_tools)
+            for mw in self._middleware:
+                mw.register_observers(stack, ctx)
 
-            async with ctx.stream.get(ModelResponse) as result:
-                await ctx.send(event)
-                message = await result
+            for condition, handler in self._observers:
+                stack.enter_context(
+                    ctx.stream.where(condition).sub_scope(handler),
+                )
 
-            while message.tool_calls and not message.response_force:
-                async with ctx.stream.get(ModelResponse) as result:
-                    await ctx.send(message.tool_calls)
-                    message = await result
+            response = await turn(event, ctx)
 
             return Conversation(
-                message,
+                response,
                 ctx=ctx,
                 agent=self,
                 client=client,
