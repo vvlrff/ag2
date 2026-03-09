@@ -22,18 +22,19 @@ class BuiltinTool(ABC):
     * :class:`~autogen.beta.tools.WebSearchTool`
     * :class:`~autogen.beta.tools.CodeExecutionTool`
 
+    .. note::
+        Currently supported providers: **Anthropic** (``AnthropicConfig``) and
+        **OpenAI Responses API** (``OpenAIResponsesConfig``).
+        Other providers will emit a warning and ignore ``builtin_tools``.
+
     Example:
         ```python
         from autogen.beta import Agent
-        from autogen.beta.config import AnthropicConfig, GeminiConfig, OpenAIResponsesConfig
+        from autogen.beta.config import AnthropicConfig, OpenAIResponsesConfig
         from autogen.beta.tools import CodeExecutionTool, WebSearchTool
 
-        # The same tool class works with any supporting provider:
-        agent = Agent("a", config=AnthropicConfig("claude-3-5-sonnet-20241022"),
-                      builtin_tools=[WebSearchTool(max_uses=3)])
-
-        agent = Agent("a", config=GeminiConfig("gemini-2.0-flash"),
-                      builtin_tools=[WebSearchTool()])
+        agent = Agent("a", config=AnthropicConfig("claude-haiku-4-5-20251001"),
+                      builtin_tools=[WebSearchTool(anthropic_version="web_search_20250305")])
 
         agent = Agent("a", config=OpenAIResponsesConfig("gpt-4o-mini"),
                       builtin_tools=[WebSearchTool(search_context_size="low")])

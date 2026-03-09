@@ -7,19 +7,8 @@ from typing import Any
 
 from google.genai import types
 
-from autogen.beta.builtin_tools import BuiltinTool
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
 from autogen.beta.tools import Tool
-
-
-def builtin_tool_to_gemini_tool(tool: BuiltinTool) -> "types.Tool | None":
-    """Convert a BuiltinTool to a ``google.genai.types.Tool``.
-
-    Returns ``None`` for tools not supported by Gemini.
-    """
-    if tool.kind == "web_search":
-        return types.Tool(google_search=types.GoogleSearch())
-    return None
 
 
 def tool_to_api(t: Tool) -> dict[str, Any]:

@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import warnings
 from collections.abc import Iterable, Sequence
 from typing import Any, TypedDict
 
@@ -23,7 +24,7 @@ from autogen.beta.events import (
 )
 from autogen.beta.tools import Tool
 
-from .mappers import builtin_tool_to_gemini_tool, convert_messages, tool_to_api
+from .mappers import convert_messages, tool_to_api
 
 
 class CreateConfig(TypedDict, total=False):
@@ -58,12 +59,19 @@ class GeminiClient(LLMClient):
         tools: Iterable[Tool],
         builtin_tools: Iterable[BuiltinTool] = (),
     ) -> ModelResponse:
+        bt_list = list(builtin_tools)
+        if bt_list:
+            warnings.warn(
+                "builtin_tools are not yet supported for GeminiClient and will be ignored. "
+                "Use AnthropicConfig or OpenAIResponsesConfig for builtin tool support.",
+                stacklevel=2,
+            )
+
         contents = convert_messages(messages)
         system_instruction = "\n\n".join(ctx.prompt) if ctx.prompt else None
 
         tool_declarations = [types.FunctionDeclaration(**tool_to_api(t)) for t in tools]
         gemini_tools: list[Any] = [types.Tool(function_declarations=tool_declarations)] if tool_declarations else []
-        gemini_tools += [gt for bt in builtin_tools if (gt := builtin_tool_to_gemini_tool(bt)) is not None]
         gemini_tools = gemini_tools or None
 
         config = types.GenerateContentConfig(

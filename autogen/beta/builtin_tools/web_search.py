@@ -40,13 +40,8 @@ class WebSearchTool(BuiltinTool):
 
     * **Anthropic** — ``anthropic_version``, ``max_uses``, ``allowed_domains``,
       ``blocked_domains``, ``user_location``
-    * **Google Gemini** — no parameters (Google Search grounding toggled on/off)
     * **OpenAI Responses API** — ``openai_version``, ``search_context_size``,
       ``user_location``, ``allowed_domains``
-
-    .. note::
-        Gemini does not support combining ``WebSearchTool`` with regular
-        function-calling tools in the same request.
 
     Args:
         anthropic_version: Anthropic tool version to use.
@@ -80,7 +75,7 @@ class WebSearchTool(BuiltinTool):
     Example:
         ```python
         from autogen.beta import Agent
-        from autogen.beta.config import AnthropicConfig, GeminiConfig, OpenAIResponsesConfig
+        from autogen.beta.config import AnthropicConfig, OpenAIResponsesConfig
         from autogen.beta.builtin_tools import WebSearchTool
 
         # Anthropic — latest version with dynamic filtering (default)
@@ -107,12 +102,6 @@ class WebSearchTool(BuiltinTool):
             )],
         )
 
-        # Gemini — no version or parameters needed
-        agent = Agent(
-            "searcher",
-            config=GeminiConfig("gemini-2.0-flash"),
-            builtin_tools=[WebSearchTool()],
-        )
         ```
     """
 

@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import warnings
 from collections.abc import Iterable, Sequence
 from typing import Any, Literal, Required, TypedDict
 
@@ -101,9 +102,13 @@ class OpenAIClient(LLMClient):
         tools: Iterable[Tool],
         builtin_tools: Iterable[BuiltinTool] = (),
     ) -> ModelResponse:
+        if list(builtin_tools):
+            warnings.warn(
+                "builtin_tools are not supported by the OpenAI Chat Completions API and will be ignored. "
+                "Use OpenAIResponsesConfig for builtin tool support.",
+                stacklevel=2,
+            )
         openai_messages = convert_messages(ctx.prompt, messages)
-        # Note: builtin_tools are not supported in the Chat Completions API.
-        # Use OpenAIResponsesConfig with OpenAIWebSearchTool for Responses API builtin tools.
 
         response = await self._client.chat.completions.create(
             **self._create_options,

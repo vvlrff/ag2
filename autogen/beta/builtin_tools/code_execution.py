@@ -27,7 +27,7 @@ class CodeExecutionTool(BuiltinTool):
     Provider support:
 
     * **Anthropic** — Bash + file operations sandbox.
-      Supported models: Claude Opus/Sonnet/Haiku 4.x, Claude Sonnet 3.7.
+      Supported models: Claude Opus/Sonnet/Haiku 4.x and later.
       See ``anthropic_version`` for available versions.
     * **OpenAI Responses API** — Code Interpreter.  By default uses an
       ephemeral container (no setup required).  Pass ``container_id`` to
@@ -55,14 +55,14 @@ class CodeExecutionTool(BuiltinTool):
         # Anthropic — latest Bash sandbox (default)
         agent = Agent(
             "coder",
-            config=AnthropicConfig("claude-sonnet-4-5-20250929"),
+            config=AnthropicConfig("claude-sonnet-4-6"),
             builtin_tools=[CodeExecutionTool()],
         )
 
         # Anthropic — legacy Python-only sandbox
         agent = Agent(
             "coder",
-            config=AnthropicConfig("claude-3-5-haiku-latest"),
+            config=AnthropicConfig("claude-haiku-4-5-20251001"),
             builtin_tools=[CodeExecutionTool(anthropic_version="code_execution_20250522")],
         )
 
