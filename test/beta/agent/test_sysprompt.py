@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Sequence
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -23,7 +24,12 @@ class MockClient(LLMClient):
     def create(self) -> "MockClient":
         return self
 
-    async def __call__(self, *messages: BaseEvent, ctx: Context, **kwargs: Any) -> None:
+    async def __call__(
+        self,
+        messages: Sequence[BaseEvent],
+        ctx: Context,
+        **kwargs: Any,
+    ) -> None:
         await ctx.send(CustomEvent())
         self.mock(ctx.prompt)
         await ctx.send(ModelResponse(message=ModelMessage(content="Hi, user!")))

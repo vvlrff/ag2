@@ -2,11 +2,50 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import Any
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
 from autogen.beta.tools import Tool
+
+
+def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, Any]]:
+    """Convert a sequence of events to Responses API input items."""
+    result: list[dict[str, Any]] = []
+
+    for message in messages:
+        if isinstance(message, ModelRequest):
+            result.append({
+                "role": "user",
+                "content": [{"type": "input_text", "text": message.content}],
+            })
+        elif isinstance(message, ModelResponse):
+            # Reconstruct assistant message
+            content: list[dict[str, Any]] = []
+            if message.message:
+                content.append({"type": "output_text", "text": message.message.content})
+            if content:
+                result.append({
+                    "role": "assistant",
+                    "content": content,
+                })
+            # Add function call items from the response
+            for call in message.tool_calls.calls:
+                result.append({
+                    "type": "function_call",
+                    "call_id": call.id,
+                    "name": call.name,
+                    "arguments": call.arguments,
+                })
+        elif isinstance(message, ToolResults):
+            for r in message.results:
+                result.append({
+                    "type": "function_call_output",
+                    "call_id": r.parent_id,
+                    "output": r.content,
+                })
+
+    return result
 
 
 def convert_messages(

@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import Any, TypedDict
 
 import httpx
@@ -70,8 +70,9 @@ class AnthropicClient(LLMClient):
 
     async def __call__(
         self,
-        *messages: BaseEvent,
+        messages: Sequence[BaseEvent],
         ctx: Context,
+        *,
         tools: Iterable[Tool],
     ) -> None:
         anthropic_messages = convert_messages(messages)

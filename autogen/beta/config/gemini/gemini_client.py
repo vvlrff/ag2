@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import Any, TypedDict
 
 from google import genai
@@ -51,8 +51,9 @@ class GeminiClient(LLMClient):
 
     async def __call__(
         self,
-        *messages: BaseEvent,
+        messages: Sequence[BaseEvent],
         ctx: Context,
+        *,
         tools: Iterable[Tool],
     ) -> None:
         contents = convert_messages(messages)

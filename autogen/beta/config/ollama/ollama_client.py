@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import Any, TypedDict
 
 from ollama import AsyncClient
@@ -52,8 +52,9 @@ class OllamaClient(LLMClient):
 
     async def __call__(
         self,
-        *messages: BaseEvent,
+        messages: Sequence[BaseEvent],
         ctx: Context,
+        *,
         tools: Iterable[Tool],
     ) -> None:
         ollama_messages = convert_messages(ctx.prompt, messages)

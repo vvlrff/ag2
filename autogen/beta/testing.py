@@ -2,6 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Sequence
 from typing import Any
 from unittest.mock import MagicMock
 
@@ -16,7 +17,12 @@ class TestClient(LLMClient):
     def __init__(self, *events: ModelResponse) -> None:
         self.events = iter(events)
 
-    async def __call__(self, *messages: BaseEvent, ctx: Context, **kwargs: Any) -> None:
+    async def __call__(
+        self,
+        messages: Sequence[BaseEvent],
+        ctx: Context,
+        **kwargs: Any,
+    ) -> None:
         for m in messages:
             if isinstance(m, ToolError):
                 raise m.error
@@ -36,9 +42,14 @@ class TrackingClient(LLMClient):
         self.client = client
         self.mock = mock
 
-    async def __call__(self, *messages: BaseEvent, ctx: Context, **kwargs: Any) -> None:
+    async def __call__(
+        self,
+        messages: Sequence[BaseEvent],
+        ctx: Context,
+        **kwargs: Any,
+    ) -> None:
         self.mock(messages[-1])
-        return await self.client(*messages, ctx=ctx, **kwargs)
+        return await self.client(messages, ctx=ctx, **kwargs)
 
 
 class TrackingConfig(ModelConfig):

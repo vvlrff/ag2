@@ -4,7 +4,7 @@
 
 import warnings
 from collections.abc import Awaitable, Callable, Iterable
-from contextlib import AsyncExitStack
+from contextlib import AsyncExitStack, ExitStack
 from functools import partial
 from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, overload
 
@@ -22,7 +22,7 @@ from .events import (
 from .exceptions import ConfigNotProvidedError
 from .history import History
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
-from .middlewares.base import AgentTurn, BaseMiddleware, MiddlewareFactory
+from .middlewares.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory
 from .stream import MemoryStream, Stream
 from .tools import FunctionParameters, FunctionTool, Tool, ToolExecutor, tool
 from .utils import CONTEXT_OPTION_NAME, build_model
@@ -265,25 +265,21 @@ class Agent(Askable):
     ) -> "Conversation":
         all_tools = self.tools + list(additional_tools)
 
-        async def _call_client(
-            event: ModelRequest | ToolResults,
-            ctx: Context,
-        ) -> None:
-            await client(
-                *await ctx.stream.history.get_events(),
-                ctx=ctx,
-                tools=all_tools,
-            )
-            return None
-
         middlewares: list[BaseMiddleware] = []
-        async with AsyncExitStack() as stack:
-            agent_turn: AgentTurn = _execute_turn
-            for m in reversed(self._middlewares):
-                middleware = m(event, ctx)
-                middlewares.append(middleware)
-                agent_turn = partial(middleware.on_turn, agent_turn)
+        agent_turn: AgentTurn = _execute_turn
+        llm_call: LLMCall = partial(client, tools=all_tools)
 
+        for m in reversed(self._middlewares):
+            middleware = m(event, ctx)
+            middlewares.append(middleware)
+
+            agent_turn = partial(middleware.on_turn, agent_turn)
+            llm_call = partial(middleware.on_llm_call, llm_call)
+
+        async def _call_client(ctx: Context) -> None:
+            await llm_call(await ctx.stream.history.get_events(), ctx)
+
+        with ExitStack() as stack:
             stack.enter_context(
                 ctx.stream.where(ModelRequest | ToolResults).sub_scope(_call_client),
             )

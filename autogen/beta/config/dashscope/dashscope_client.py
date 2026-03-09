@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import Any, TypedDict
 
 import dashscope
@@ -54,8 +54,9 @@ class DashScopeClient(LLMClient):
 
     async def __call__(
         self,
-        *messages: BaseEvent,
+        messages: Sequence[BaseEvent],
         ctx: Context,
+        *,
         tools: Iterable[Tool],
     ) -> None:
         ds_messages = convert_messages(ctx.prompt, messages)

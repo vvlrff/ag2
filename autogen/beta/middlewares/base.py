@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Sequence
 from typing import Any, Protocol, TypeAlias
 
 from autogen.beta.annotations import Context
@@ -34,6 +34,7 @@ class Middleware(MiddlewareFactory):
 
 AgentTurn: TypeAlias = Callable[["BaseEvent", "Context"], Awaitable["ModelResponse"]]
 ToolExecution: TypeAlias = Callable[["ToolCall", "Context"], Awaitable["ToolResult | ToolError | ClientToolCall"]]
+LLMCall: TypeAlias = Callable[["Sequence[BaseEvent]", "Context"], Awaitable["ModelResponse"]]
 
 
 class BaseMiddleware:
@@ -60,3 +61,11 @@ class BaseMiddleware:
         ctx: "Context",
     ) -> "ToolResult":
         return await call_next(event, ctx)
+
+    async def on_llm_call(
+        self,
+        call_next: LLMCall,
+        events: "Sequence[BaseEvent]",
+        ctx: "Context",
+    ) -> "ModelResponse":
+        return await call_next(events, ctx)

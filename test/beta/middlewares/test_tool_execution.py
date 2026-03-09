@@ -8,7 +8,7 @@ import pytest
 
 from autogen.beta import Agent, Context
 from autogen.beta.events import BaseEvent, ToolCall, ToolResult
-from autogen.beta.middlewares import AgentTurn, BaseMiddleware, Middleware
+from autogen.beta.middlewares import BaseMiddleware, Middleware, ToolExecution
 from autogen.beta.testing import TestConfig, TrackingConfig
 from autogen.beta.tools import tool
 
@@ -27,7 +27,7 @@ async def test_tool_execution_middleware(mock: MagicMock) -> None:
 
         async def on_tool_execution(
             self,
-            call_next: AgentTurn,
+            call_next: ToolExecution,
             event: ToolCall,
             ctx: Context,
         ) -> ToolResult:
@@ -55,6 +55,51 @@ async def test_tool_execution_middleware(mock: MagicMock) -> None:
     mock.exit.assert_called_once_with('"tool executed"')
 
 
+class OrderingMiddleware(BaseMiddleware):
+    def __init__(
+        self,
+        event: BaseEvent,
+        ctx: Context,
+        mock: MagicMock,
+        position: int,
+    ) -> None:
+        super().__init__(event, ctx)
+        self.mock = mock
+        self.position = position
+
+    async def on_tool_execution(
+        self,
+        call_next: ToolExecution,
+        event: ToolCall,
+        ctx: Context,
+    ) -> ToolResult:
+        self.mock.enter(self.position)
+        result = await call_next(event, ctx)
+        self.mock.exit(self.position)
+        return result
+
+
+@pytest.mark.asyncio()
+async def test_middleware_call_sequence(mock: MagicMock) -> None:
+    def my_tool() -> str:
+        return "ok"
+
+    agent = Agent(
+        "",
+        config=TestConfig(
+            ToolCall(name="my_tool"),
+            "result",
+        ),
+        tools=[my_tool],
+        middlewares=[Middleware(OrderingMiddleware, mock=mock, position=i) for i in range(1, 4)],
+    )
+
+    await agent.ask("Hi!")
+
+    assert [c.args[0] for c in mock.enter.call_args_list] == [1, 2, 3]
+    assert [c.args[0] for c in mock.exit.call_args_list] == [3, 2, 1]
+
+
 @pytest.mark.asyncio()
 async def test_capture_tool_execution_error(mock: MagicMock) -> None:
     class MockMiddleware(BaseMiddleware):
@@ -69,7 +114,7 @@ async def test_capture_tool_execution_error(mock: MagicMock) -> None:
 
         async def on_tool_execution(
             self,
-            call_next: AgentTurn,
+            call_next: ToolExecution,
             event: ToolCall,
             ctx: Context,
         ) -> ToolResult:
@@ -103,7 +148,7 @@ async def test_tool_execution_middleware_mutates_arguments_and_result() -> None:
     class MutatingToolMiddleware(BaseMiddleware):
         async def on_tool_execution(
             self,
-            call_next: AgentTurn,
+            call_next: ToolExecution,
             event: ToolCall,
             ctx: Context,
         ) -> ToolResult:

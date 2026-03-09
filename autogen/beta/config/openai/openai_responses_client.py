@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from typing import Any, Required, TypedDict
 
 import httpx
@@ -25,15 +25,13 @@ from autogen.beta.events import (
     ModelMessage,
     ModelMessageChunk,
     ModelReasoning,
-    ModelRequest,
     ModelResponse,
     ToolCall,
     ToolCalls,
-    ToolResults,
 )
 from autogen.beta.tools import Tool
 
-from .mappers import tool_to_responses_api
+from .mappers import events_to_responses_input, tool_to_responses_api
 
 
 class CreateOptions(TypedDict, total=False):
@@ -86,11 +84,12 @@ class OpenAIResponsesClient(LLMClient):
 
     async def __call__(
         self,
-        *messages: BaseEvent,
+        messages: Sequence[BaseEvent],
         ctx: Context,
+        *,
         tools: Iterable[Tool],
     ) -> None:
-        input_items = self._convert_input(messages)
+        input_items = events_to_responses_input(messages)
         instructions = "\n\n".join(ctx.prompt) if ctx.prompt else None
 
         response = await self._client.responses.create(
@@ -104,46 +103,6 @@ class OpenAIResponsesClient(LLMClient):
             await self._process_stream(response, ctx)
         else:
             await self._process_response(response, ctx)
-
-    def _convert_input(
-        self,
-        messages: tuple[BaseEvent, ...],
-    ) -> list[dict[str, Any]]:
-        result: list[dict[str, Any]] = []
-
-        for message in messages:
-            if isinstance(message, ModelRequest):
-                result.append({
-                    "role": "user",
-                    "content": [{"type": "input_text", "text": message.content}],
-                })
-            elif isinstance(message, ModelResponse):
-                # Reconstruct assistant message
-                content: list[dict[str, Any]] = []
-                if message.message:
-                    content.append({"type": "output_text", "text": message.message.content})
-                if content:
-                    result.append({
-                        "role": "assistant",
-                        "content": content,
-                    })
-                # Add function call items from the response
-                for call in message.tool_calls.calls:
-                    result.append({
-                        "type": "function_call",
-                        "call_id": call.id,
-                        "name": call.name,
-                        "arguments": call.arguments,
-                    })
-            elif isinstance(message, ToolResults):
-                for r in message.results:
-                    result.append({
-                        "type": "function_call_output",
-                        "call_id": r.parent_id,
-                        "output": r.content,
-                    })
-
-        return result
 
     async def _process_response(
         self,
