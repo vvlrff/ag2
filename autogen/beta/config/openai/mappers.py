@@ -27,6 +27,7 @@ def convert_messages(
 
 
 def tool_to_api(t: Tool) -> dict[str, Any]:
+    """Chat Completions API tool format."""
     return {
         "type": "function",
         "function": {
@@ -34,4 +35,14 @@ def tool_to_api(t: Tool) -> dict[str, Any]:
             "description": t.schema.function.description,
             "parameters": {"additionalProperties": False} | t.schema.function.parameters,
         },
+    }
+
+
+def tool_to_responses_api(t: Tool) -> dict[str, Any]:
+    """Responses API tool format — name/description at top level."""
+    return {
+        "type": "function",
+        "name": t.schema.function.name,
+        "description": t.schema.function.description,
+        "parameters": {"additionalProperties": False} | t.schema.function.parameters,
     }
