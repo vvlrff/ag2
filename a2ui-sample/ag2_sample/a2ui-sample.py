@@ -1,5 +1,9 @@
 import json
+import os
 import re
+
+from dotenv import load_dotenv
+load_dotenv(os.path.join(os.path.dirname(__file__), "../../.env"))
 from collections.abc import AsyncIterator
 from pathlib import Path
 from uuid import uuid4
@@ -8,6 +12,7 @@ from a2ui.core.schema.catalog import CatalogConfig
 from a2ui.core.schema.manager import A2uiSchemaManager
 from ag_ui.core import ActivitySnapshotEvent
 from fastapi import FastAPI, Header
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from autogen import ConversableAgent, LLMConfig
@@ -15,6 +20,12 @@ from autogen.ag_ui import AGUIStream, RunAgentInput
 from autogen.agentchat.remote import ServiceResponse
 
 app = FastAPI()
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 _BASE = Path(__file__).resolve().parent
 _A2UI_SPEC = _BASE / "specification" / "v0_8" / "json"
@@ -52,7 +63,7 @@ print(instruction)
 agent = ConversableAgent(
     name="a2ui_support_bot",
     system_message=instruction,
-    llm_config=LLMConfig({"api_type": "google", "model": "gemini-3.1-flash-lite-preview"}),
+    llm_config=LLMConfig({"api_type": "google", "model": "gemini-3.1-flash-lite-preview","api_key": os.environ.get("GOOGLE_GEMINI_API_KEY"),}),
 )
 
 
