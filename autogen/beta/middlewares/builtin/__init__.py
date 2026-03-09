@@ -2,6 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from .history_limiter import HistoryLimiter
 from .logging import LoggingMiddleware
 
-__all__ = ("LoggingMiddleware",)
+__all__ = (
+    "HistoryLimiter",
+    "LoggingMiddleware",
+)
