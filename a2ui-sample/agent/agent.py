@@ -80,9 +80,7 @@ class RestaurantAgent:
             # The prompt instructs the LLM to return a *list* of messages.
             # Therefore, our validation schema must be an *array* of the single message schema.
             self.a2ui_schema_object = {"type": "array", "items": single_message_schema}
-            logger.info(
-                "A2UI_SCHEMA successfully loaded and wrapped in an array validator."
-            )
+            logger.info("A2UI_SCHEMA successfully loaded and wrapped in an array validator.")
         except json.JSONDecodeError as e:
             logger.error(f"CRITICAL: Failed to parse A2UI_SCHEMA: {e}")
             self.a2ui_schema_object = None
@@ -97,9 +95,7 @@ class RestaurantAgent:
 
         if use_ui:
             # Construct the full prompt with UI instructions, examples, and schema
-            instruction = AGENT_INSTRUCTION + get_ui_prompt(
-                self.base_url, RESTAURANT_UI_EXAMPLES
-            )
+            instruction = AGENT_INSTRUCTION + get_ui_prompt(self.base_url, RESTAURANT_UI_EXAMPLES)
         else:
             instruction = get_text_prompt()
 
@@ -136,10 +132,7 @@ class RestaurantAgent:
 
         # Ensure schema was loaded
         if self.use_ui and self.a2ui_schema_object is None:
-            logger.error(
-                "--- RestaurantAgent.stream: A2UI_SCHEMA is not loaded. "
-                "Cannot perform UI validation. ---"
-            )
+            logger.error("--- RestaurantAgent.stream: A2UI_SCHEMA is not loaded. Cannot perform UI validation. ---")
             yield {
                 "is_task_complete": True,
                 "content": (
@@ -151,14 +144,9 @@ class RestaurantAgent:
 
         while attempt <= max_retries:
             attempt += 1
-            logger.info(
-                f"--- RestaurantAgent.stream: Attempt {attempt}/{max_retries + 1} "
-                f"for session {session_id} ---"
-            )
+            logger.info(f"--- RestaurantAgent.stream: Attempt {attempt}/{max_retries + 1} for session {session_id} ---")
 
-            current_message = types.Content(
-                role="user", parts=[types.Part.from_text(text=current_query_text)]
-            )
+            current_message = types.Content(role="user", parts=[types.Part.from_text(text=current_query_text)])
             final_response_content = None
 
             async for event in self._runner.run_async(
@@ -168,14 +156,8 @@ class RestaurantAgent:
             ):
                 logger.info(f"Event from runner: {event}")
                 if event.is_final_response():
-                    if (
-                        event.content
-                        and event.content.parts
-                        and event.content.parts[0].text
-                    ):
-                        final_response_content = "\n".join(
-                            [p.text for p in event.content.parts if p.text]
-                        )
+                    if event.content and event.content.parts and event.content.parts[0].text:
+                        final_response_content = "\n".join([p.text for p in event.content.parts if p.text])
                     break  # Got the final response, stop consuming events
                 else:
                     logger.info(f"Intermediate event: {event}")
@@ -192,8 +174,7 @@ class RestaurantAgent:
                 )
                 if attempt <= max_retries:
                     current_query_text = (
-                        "I received no response. Please try again."
-                        f"Please retry the original request: '{query}'"
+                        f"I received no response. Please try again.Please retry the original request: '{query}'"
                     )
                     continue  # Go to next retry
                 else:
@@ -205,23 +186,17 @@ class RestaurantAgent:
             error_message = ""
 
             if self.use_ui:
-                logger.info(
-                    f"--- RestaurantAgent.stream: Validating UI response (Attempt {attempt})... ---"
-                )
+                logger.info(f"--- RestaurantAgent.stream: Validating UI response (Attempt {attempt})... ---")
                 try:
                     if "---a2ui_JSON---" not in final_response_content:
                         raise ValueError("Delimiter '---a2ui_JSON---' not found.")
 
-                    text_part, json_string = final_response_content.split(
-                        "---a2ui_JSON---", 1
-                    )
+                    text_part, json_string = final_response_content.split("---a2ui_JSON---", 1)
 
                     if not json_string.strip():
                         raise ValueError("JSON part is empty.")
 
-                    json_string_cleaned = (
-                        json_string.strip().lstrip("```json").rstrip("```").strip()
-                    )
+                    json_string_cleaned = json_string.strip().lstrip("```json").rstrip("```").strip()
 
                     if not json_string_cleaned:
                         raise ValueError("Cleaned JSON string is empty.")
@@ -232,12 +207,8 @@ class RestaurantAgent:
 
                     # 2. Check if it validates against the A2UI_SCHEMA
                     # This will raise jsonschema.exceptions.ValidationError if it fails
-                    logger.info(
-                        "--- RestaurantAgent.stream: Validating against A2UI_SCHEMA... ---"
-                    )
-                    jsonschema.validate(
-                        instance=parsed_json_data, schema=self.a2ui_schema_object
-                    )
+                    logger.info("--- RestaurantAgent.stream: Validating against A2UI_SCHEMA... ---")
+                    jsonschema.validate(instance=parsed_json_data, schema=self.a2ui_schema_object)
                     # --- End New Validation Steps ---
 
                     logger.info(
@@ -251,12 +222,8 @@ class RestaurantAgent:
                     json.JSONDecodeError,
                     jsonschema.exceptions.ValidationError,
                 ) as e:
-                    logger.warning(
-                        f"--- RestaurantAgent.stream: A2UI validation failed: {e} (Attempt {attempt}) ---"
-                    )
-                    logger.warning(
-                        f"--- Failed response content: {final_response_content[:500]}... ---"
-                    )
+                    logger.warning(f"--- RestaurantAgent.stream: A2UI validation failed: {e} (Attempt {attempt}) ---")
+                    logger.warning(f"--- Failed response content: {final_response_content[:500]}... ---")
                     error_message = f"Validation failed: {e}."
 
             else:  # Not using UI, so text is always "valid"
@@ -276,9 +243,7 @@ class RestaurantAgent:
             # --- If we're here, it means validation failed ---
 
             if attempt <= max_retries:
-                logger.warning(
-                    f"--- RestaurantAgent.stream: Retrying... ({attempt}/{max_retries + 1}) ---"
-                )
+                logger.warning(f"--- RestaurantAgent.stream: Retrying... ({attempt}/{max_retries + 1}) ---")
                 # Prepare the query for the retry
                 current_query_text = (
                     f"Your previous response was invalid. {error_message} "
@@ -290,9 +255,7 @@ class RestaurantAgent:
                 # Loop continues...
 
         # --- If we're here, it means we've exhausted retries ---
-        logger.error(
-            "--- RestaurantAgent.stream: Max retries exhausted. Sending text-only error. ---"
-        )
+        logger.error("--- RestaurantAgent.stream: Max retries exhausted. Sending text-only error. ---")
         yield {
             "is_task_complete": True,
             "content": (

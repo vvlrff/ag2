@@ -33,6 +33,7 @@ from a2a.utils import (
 )
 from a2a.utils.errors import ServerError
 from a2ui.a2ui_extension import create_a2ui_part, try_activate_a2ui_extension
+
 from agent import RestaurantAgent
 
 logger = logging.getLogger(__name__)
@@ -56,27 +57,19 @@ class RestaurantAgentExecutor(AgentExecutor):
         ui_event_part = None
         action = None
 
-        logger.info(
-            f"--- Client requested extensions: {context.requested_extensions} ---"
-        )
+        logger.info(f"--- Client requested extensions: {context.requested_extensions} ---")
         use_ui = try_activate_a2ui_extension(context)
 
         # Determine which agent to use based on whether the a2ui extension is active.
         if use_ui:
             agent = self.ui_agent
-            logger.info(
-                "--- AGENT_EXECUTOR: A2UI extension is active. Using UI agent. ---"
-            )
+            logger.info("--- AGENT_EXECUTOR: A2UI extension is active. Using UI agent. ---")
         else:
             agent = self.text_agent
-            logger.info(
-                "--- AGENT_EXECUTOR: A2UI extension is not active. Using text agent. ---"
-            )
+            logger.info("--- AGENT_EXECUTOR: A2UI extension is not active. Using text agent. ---")
 
         if context.message and context.message.parts:
-            logger.info(
-                f"--- AGENT_EXECUTOR: Processing {len(context.message.parts)} message parts ---"
-            )
+            logger.info(f"--- AGENT_EXECUTOR: Processing {len(context.message.parts)} message parts ---")
             for i, part in enumerate(context.message.parts):
                 if isinstance(part.root, DataPart):
                     if "userAction" in part.root.data:
@@ -132,11 +125,7 @@ class RestaurantAgentExecutor(AgentExecutor):
                 )
                 continue
 
-            final_state = (
-                TaskState.completed
-                if action == "submit_booking"
-                else TaskState.input_required
-            )
+            final_state = TaskState.completed if action == "submit_booking" else TaskState.input_required
 
             content = item["content"]
             final_parts = []
@@ -149,24 +138,18 @@ class RestaurantAgentExecutor(AgentExecutor):
 
                 if json_string.strip():
                     try:
-                        json_string_cleaned = (
-                            json_string.strip().lstrip("```json").rstrip("```").strip()
-                        )
+                        json_string_cleaned = json_string.strip().lstrip("```json").rstrip("```").strip()
                         # The new protocol sends a stream of JSON objects.
                         # For this example, we'll assume they are sent as a list in the final response.
                         json_data = json.loads(json_string_cleaned)
 
                         if isinstance(json_data, list):
-                            logger.info(
-                                f"Found {len(json_data)} messages. Creating individual DataParts."
-                            )
+                            logger.info(f"Found {len(json_data)} messages. Creating individual DataParts.")
                             for message in json_data:
                                 final_parts.append(create_a2ui_part(message))
                         else:
                             # Handle the case where a single JSON object is returned
-                            logger.info(
-                                "Received a single JSON object. Creating a DataPart."
-                            )
+                            logger.info("Received a single JSON object. Creating a DataPart.")
                             final_parts.append(create_a2ui_part(json_data))
 
                     except json.JSONDecodeError as e:
@@ -191,7 +174,5 @@ class RestaurantAgentExecutor(AgentExecutor):
             )
             break
 
-    async def cancel(
-        self, request: RequestContext, event_queue: EventQueue
-    ) -> Task | None:
+    async def cancel(self, request: RequestContext, event_queue: EventQueue) -> Task | None:
         raise ServerError(error=UnsupportedOperationError())

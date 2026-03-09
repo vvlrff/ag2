@@ -3,6 +3,7 @@ import os
 import re
 
 from dotenv import load_dotenv
+
 load_dotenv(os.path.join(os.path.dirname(__file__), "../../.env"))
 from collections.abc import AsyncIterator
 from pathlib import Path
@@ -63,7 +64,11 @@ print(instruction)
 agent = ConversableAgent(
     name="a2ui_support_bot",
     system_message=instruction,
-    llm_config=LLMConfig({"api_type": "google", "model": "gemini-3.1-flash-lite-preview","api_key": os.environ.get("GOOGLE_GEMINI_API_KEY"),}),
+    llm_config=LLMConfig({
+        "api_type": "google",
+        "model": "gemini-3.1-flash-lite-preview",
+        "api_key": os.environ.get("GOOGLE_GEMINI_API_KEY"),
+    }),
 )
 
 
