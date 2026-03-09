@@ -277,7 +277,8 @@ class Agent(Askable):
             llm_call = partial(middleware.on_llm_call, llm_call)
 
         async def _call_client(ctx: Context) -> None:
-            await llm_call(await ctx.stream.history.get_events(), ctx)
+            result = await llm_call(await ctx.stream.history.get_events(), ctx)
+            await ctx.send(result)
 
         with ExitStack() as stack:
             stack.enter_context(

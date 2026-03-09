@@ -22,7 +22,7 @@ class TestClient(LLMClient):
         messages: Sequence[BaseEvent],
         ctx: Context,
         **kwargs: Any,
-    ) -> None:
+    ) -> ModelResponse:
         for m in messages:
             if isinstance(m, ToolError):
                 raise m.error
@@ -34,7 +34,7 @@ class TestClient(LLMClient):
         elif isinstance(next_msg, ToolCall):
             next_msg = ModelResponse(tool_calls=ToolCalls(calls=[next_msg]))
 
-        await ctx.send(next_msg)
+        return next_msg
 
 
 class TrackingClient(LLMClient):
@@ -47,7 +47,7 @@ class TrackingClient(LLMClient):
         messages: Sequence[BaseEvent],
         ctx: Context,
         **kwargs: Any,
-    ) -> None:
+    ) -> ModelResponse:
         self.mock(messages[-1])
         return await self.client(messages, ctx=ctx, **kwargs)
 

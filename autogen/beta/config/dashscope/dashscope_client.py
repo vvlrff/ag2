@@ -58,7 +58,7 @@ class DashScopeClient(LLMClient):
         ctx: Context,
         *,
         tools: Iterable[Tool],
-    ) -> None:
+    ) -> ModelResponse:
         ds_messages = convert_messages(ctx.prompt, messages)
         tools_list = [tool_to_api(t) for t in tools]
 
@@ -74,16 +74,15 @@ class DashScopeClient(LLMClient):
         dashscope.base_http_api_url = self._base_url
 
         if self._streaming:
-            await self._call_streaming(ds_messages, kwargs, ctx)
-        else:
-            await self._call_non_streaming(ds_messages, kwargs, ctx)
+            return await self._call_streaming(ds_messages, kwargs, ctx)
+        return await self._call_non_streaming(ds_messages, kwargs, ctx)
 
     async def _call_non_streaming(
         self,
         messages: list[dict[str, Any]],
         kwargs: dict[str, Any],
         ctx: Context,
-    ) -> None:
+    ) -> ModelResponse:
         response = await AioGeneration.call(
             model=self._model,
             messages=messages,
@@ -125,12 +124,10 @@ class DashScopeClient(LLMClient):
             "total_tokens": usage.get("total_tokens", 0),
         }
 
-        await ctx.send(
-            ModelResponse(
-                message=model_msg,
-                tool_calls=ToolCalls(calls=calls),
-                usage=usage_dict,
-            )
+        return ModelResponse(
+            message=model_msg,
+            tool_calls=ToolCalls(calls=calls),
+            usage=usage_dict,
         )
 
     async def _call_streaming(
@@ -138,7 +135,7 @@ class DashScopeClient(LLMClient):
         messages: list[dict[str, Any]],
         kwargs: dict[str, Any],
         ctx: Context,
-    ) -> None:
+    ) -> ModelResponse:
         responses = await AioGeneration.call(
             model=self._model,
             messages=messages,
@@ -191,10 +188,8 @@ class DashScopeClient(LLMClient):
             message = ModelMessage(content=full_content)
             await ctx.send(message)
 
-        await ctx.send(
-            ModelResponse(
-                message=message,
-                tool_calls=ToolCalls(calls=calls),
-                usage=usage_dict,
-            )
+        return ModelResponse(
+            message=message,
+            tool_calls=ToolCalls(calls=calls),
+            usage=usage_dict,
         )

@@ -84,10 +84,11 @@ class EventMeta(type):
         namespace["__init__"] = __init__
 
         def __repr__(self) -> str:
-            fields = ", ".join(f"{k}={v!r}" for k, v in self.__dict__.items())
+            fields = ", ".join(f"{k}={v!r}" for k, v in self.__dict__.items() if not k.startswith("_"))
             return f"{self.__class__.__name__}({fields})"
 
-        namespace["__repr__"] = __repr__
+        if "__repr__" not in namespace and "__str__" not in namespace:
+            namespace["__repr__"] = __repr__
 
         return super().__new__(mcs, name, bases, namespace)
 

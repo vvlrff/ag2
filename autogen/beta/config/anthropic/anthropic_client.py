@@ -74,7 +74,7 @@ class AnthropicClient(LLMClient):
         ctx: Context,
         *,
         tools: Iterable[Tool],
-    ) -> None:
+    ) -> ModelResponse:
         anthropic_messages = convert_messages(messages)
 
         if ctx.prompt:
@@ -94,7 +94,7 @@ class AnthropicClient(LLMClient):
                 messages=anthropic_messages,
                 tools=tools_list if tools_list else NOT_GIVEN,
             ) as stream:
-                await self._process_stream(stream, ctx)
+                return await self._process_stream(stream, ctx)
         else:
             response = await self._client.messages.create(
                 **self._create_options,
@@ -102,7 +102,7 @@ class AnthropicClient(LLMClient):
                 messages=anthropic_messages,
                 tools=tools_list if tools_list else NOT_GIVEN,
             )
-            await self._process_response(response, ctx)
+            return await self._process_response(response, ctx)
 
     def _build_system(self, prompt: list[str]) -> Any:
         text = "\n\n".join(prompt)
@@ -125,7 +125,7 @@ class AnthropicClient(LLMClient):
         self,
         response: Message,
         ctx: Context,
-    ) -> None:
+    ) -> ModelResponse:
         model_msg: ModelMessage | None = None
         calls: list[ToolCall] = []
 
@@ -149,19 +149,17 @@ class AnthropicClient(LLMClient):
 
         usage = response.usage.model_dump() if response.usage else {}
 
-        await ctx.send(
-            ModelResponse(
-                message=model_msg,
-                tool_calls=ToolCalls(calls=calls),
-                usage=usage,
-            )
+        return ModelResponse(
+            message=model_msg,
+            tool_calls=ToolCalls(calls=calls),
+            usage=usage,
         )
 
     async def _process_stream(
         self,
         stream: Any,
         ctx: Context,
-    ) -> None:
+    ) -> ModelResponse:
         full_content: str = ""
         calls: list[ToolCall] = []
 
@@ -212,10 +210,8 @@ class AnthropicClient(LLMClient):
         final_message = await stream.get_final_message()
         usage = final_message.usage.model_dump() if final_message.usage else {}
 
-        await ctx.send(
-            ModelResponse(
-                message=message,
-                tool_calls=ToolCalls(calls=calls),
-                usage=usage,
-            )
+        return ModelResponse(
+            message=message,
+            tool_calls=ToolCalls(calls=calls),
+            usage=usage,
         )

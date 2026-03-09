@@ -88,7 +88,7 @@ class OpenAIResponsesClient(LLMClient):
         ctx: Context,
         *,
         tools: Iterable[Tool],
-    ) -> None:
+    ) -> ModelResponse:
         input_items = events_to_responses_input(messages)
         instructions = "\n\n".join(ctx.prompt) if ctx.prompt else None
 
@@ -100,15 +100,14 @@ class OpenAIResponsesClient(LLMClient):
         )
 
         if self._streaming:
-            await self._process_stream(response, ctx)
-        else:
-            await self._process_response(response, ctx)
+            return await self._process_stream(response, ctx)
+        return await self._process_response(response, ctx)
 
     async def _process_response(
         self,
         response: Response,
         ctx: Context,
-    ) -> None:
+    ) -> ModelResponse:
         model_msg: ModelMessage | None = None
         calls: list[ToolCall] = []
 
@@ -135,19 +134,17 @@ class OpenAIResponsesClient(LLMClient):
 
         usage = response.usage.model_dump() if response.usage else {}
 
-        await ctx.send(
-            ModelResponse(
-                message=model_msg,
-                tool_calls=ToolCalls(calls=calls),
-                usage=usage,
-            )
+        return ModelResponse(
+            message=model_msg,
+            tool_calls=ToolCalls(calls=calls),
+            usage=usage,
         )
 
     async def _process_stream(
         self,
         response_stream: Any,
         ctx: Context,
-    ) -> None:
+    ) -> ModelResponse:
         full_content: str = ""
         usage: dict[str, Any] = {}
         calls: list[ToolCall] = []
@@ -177,10 +174,8 @@ class OpenAIResponsesClient(LLMClient):
             message = ModelMessage(content=full_content)
             await ctx.send(message)
 
-        await ctx.send(
-            ModelResponse(
-                message=message,
-                tool_calls=ToolCalls(calls=calls),
-                usage=usage,
-            )
+        return ModelResponse(
+            message=message,
+            tool_calls=ToolCalls(calls=calls),
+            usage=usage,
         )

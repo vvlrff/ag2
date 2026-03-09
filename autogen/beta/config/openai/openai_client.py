@@ -98,7 +98,7 @@ class OpenAIClient(LLMClient):
         ctx: Context,
         *,
         tools: Iterable[Tool],
-    ) -> None:
+    ) -> ModelResponse:
         openai_messages = convert_messages(ctx.prompt, messages)
 
         response = await self._client.chat.completions.create(
@@ -108,15 +108,17 @@ class OpenAIClient(LLMClient):
         )
 
         if self._streaming:
-            await self._process_stream(response, ctx)
+            result = await self._process_stream(response, ctx)
         else:
-            await self._process_completion(response, ctx)
+            result = await self._process_completion(response, ctx)
+
+        return result
 
     async def _process_completion(
         self,
         completion: ChatCompletion,
         ctx: Context,
-    ) -> ToolCalls | ModelMessage:
+    ) -> ModelResponse:
         for choice in completion.choices or ():
             msg = choice.message
 
@@ -137,19 +139,17 @@ class OpenAIClient(LLMClient):
                 for c in (msg.tool_calls or ())
             ]
 
-            await ctx.send(
-                ModelResponse(
-                    message=model_msg,
-                    tool_calls=ToolCalls(calls=calls),
-                    usage=completion.usage.model_dump() if completion.usage else {},
-                )
+            return ModelResponse(
+                message=model_msg,
+                tool_calls=ToolCalls(calls=calls),
+                usage=completion.usage.model_dump() if completion.usage else {},
             )
 
     async def _process_stream(
         self,
         response_stream: AsyncStream[ChatCompletionChunk],
         ctx: Context,
-    ) -> ToolCalls | ModelMessage:
+    ) -> ModelResponse:
         full_content: str = ""
         usage: dict[str, Any] = {}
 
@@ -204,10 +204,8 @@ class OpenAIClient(LLMClient):
             for acc in full_tool_calls
         ]
 
-        await ctx.send(
-            ModelResponse(
-                message=message,
-                tool_calls=ToolCalls(calls=calls),
-                usage=usage,
-            )
+        return ModelResponse(
+            message=message,
+            tool_calls=ToolCalls(calls=calls),
+            usage=usage,
         )

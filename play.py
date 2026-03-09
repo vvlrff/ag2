@@ -12,6 +12,7 @@ from autogen.beta.events import (
     ToolCall,
     ToolResult,
 )
+from autogen.beta.middlewares import LoggingMiddleware
 from autogen.beta.tools import tool
 
 
@@ -39,11 +40,6 @@ def hitl_subscriber(event: HumanInputRequest) -> HumanMessage:
 stream = MemoryStream()
 
 
-@stream.subscribe()
-async def log_all_event(event: BaseEvent, ctx: Context):
-    print("event:", event)
-
-
 @stream.where(ToolCall).subscribe(interrupt=True)
 async def patch_data(event: ToolCall, ctx: Context) -> BaseEvent | None:
     print("interrupt:", event.arguments)
@@ -54,6 +50,7 @@ async def patch_data(event: ToolCall, ctx: Context) -> BaseEvent | None:
 async def func(cmd: str, ctx: Context) -> str:
     """Just a test tool. Call it each time to let me testing tools."""
     print()
+    raise ValueError
     r = await ctx.input(cmd, timeout=0.0)
     print()
     return r
@@ -62,6 +59,14 @@ async def func(cmd: str, ctx: Context) -> str:
 async def get_prompt(event: BaseEvent, ctx: Context) -> str:
     return "Do your best to be helpful!"
 
+
+import logging
+
+logger = logging.getLogger("autogen")
+logger.setLevel(logging.DEBUG)
+logger.addHandler(logging.StreamHandler())
+
+logger.info("Starting agent")
 
 agent = Agent(
     "test",
@@ -74,6 +79,7 @@ agent = Agent(
     hitl_hook=hitl_subscriber,
     # config=MockClient(),
     tools=[func],
+    middlewares=[LoggingMiddleware()],
 )
 
 
@@ -82,10 +88,10 @@ async def main() -> None:
     # print("\nFinal history:")
     # final_events = list(await conversation.history.get_events())
     # pprint(final_events)
-    print("\nResult:", conversation.message, "\n", "=" * 80, "\n")
+    # print("\nResult:", conversation.message, "\n", "=" * 80, "\n")
 
     result = await conversation.ask("And one more time")
-    print("\nResult:", result.message, "\n", "=" * 80, "\n")
+    # print("\nResult:", result.message, "\n", "=" * 80, "\n")
 
 
 #         # alternatively

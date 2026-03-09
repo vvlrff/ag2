@@ -63,6 +63,9 @@ class ToolCall(ToolEvent):
     def serialized_arguments(self, value: dict[str, Any]) -> None:
         self._serialized_arguments = value
 
+    def __repr__(self) -> str:
+        return f"ToolCall(id={self.id}, name={self.name}, arguments={self.arguments})"
+
     def to_api(self) -> dict[str, Any]:
         return {
             "id": self.id,
@@ -107,6 +110,9 @@ class ToolResult(ToolEvent):
     @content.setter
     def content(self, value: str) -> None:
         self._content = value
+
+    def __repr__(self) -> str:
+        return f"ToolResult(parent_id={self.parent_id}, name={self.name}, content={self.content})"
 
     def to_api(self) -> dict[str, Any]:
         return {
@@ -203,6 +209,14 @@ class ModelResponse(ModelEvent):
     tool_calls: ToolCalls = Field(default_factory=ToolCalls)
     usage: dict[str, float] = Field(default_factory=dict)
     response_force: bool = False
+
+    def __repr__(self) -> str:
+        text = f"content={getattr(self.message, 'content', None)}"
+        if self.tool_calls:
+            text += f", tool_calls={self.tool_calls}"
+        if self.usage:
+            text += f", usage={self.usage}"
+        return f"ModelResponse({text})"
 
     def to_api(self) -> dict[str, Any]:
         msg = {

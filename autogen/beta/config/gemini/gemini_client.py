@@ -55,7 +55,7 @@ class GeminiClient(LLMClient):
         ctx: Context,
         *,
         tools: Iterable[Tool],
-    ) -> None:
+    ) -> ModelResponse:
         contents = convert_messages(messages)
         system_instruction = "\n\n".join(ctx.prompt) if ctx.prompt else None
 
@@ -75,20 +75,20 @@ class GeminiClient(LLMClient):
                 contents=contents,
                 config=config,
             )
-            await self._process_stream(stream, ctx)
-        else:
-            response = await self._client.aio.models.generate_content(
-                model=self._model_name,
-                contents=contents,
-                config=config,
-            )
-            await self._process_response(response, ctx)
+            return await self._process_stream(stream, ctx)
+
+        response = await self._client.aio.models.generate_content(
+            model=self._model_name,
+            contents=contents,
+            config=config,
+        )
+        return await self._process_response(response, ctx)
 
     async def _process_response(
         self,
         response: types.GenerateContentResponse,
         ctx: Context,
-    ) -> None:
+    ) -> ModelResponse:
         model_msg: ModelMessage | None = None
         calls: list[ToolCall] = []
 
@@ -121,19 +121,17 @@ class GeminiClient(LLMClient):
                 "total_token_count": response.usage_metadata.total_token_count,
             }
 
-        await ctx.send(
-            ModelResponse(
-                message=model_msg,
-                tool_calls=ToolCalls(calls=calls),
-                usage=usage,
-            )
+        return ModelResponse(
+            message=model_msg,
+            tool_calls=ToolCalls(calls=calls),
+            usage=usage,
         )
 
     async def _process_stream(
         self,
         stream: Any,
         ctx: Context,
-    ) -> None:
+    ) -> ModelResponse:
         full_content: str = ""
         calls: list[ToolCall] = []
         usage: dict[str, Any] = {}
@@ -172,10 +170,8 @@ class GeminiClient(LLMClient):
             message = ModelMessage(content=full_content)
             await ctx.send(message)
 
-        await ctx.send(
-            ModelResponse(
-                message=message,
-                tool_calls=ToolCalls(calls=calls),
-                usage=usage,
-            )
+        return ModelResponse(
+            message=message,
+            tool_calls=ToolCalls(calls=calls),
+            usage=usage,
         )

@@ -56,7 +56,7 @@ class OllamaClient(LLMClient):
         ctx: Context,
         *,
         tools: Iterable[Tool],
-    ) -> None:
+    ) -> ModelResponse:
         ollama_messages = convert_messages(ctx.prompt, messages)
         tools_list = [tool_to_api(t) for t in tools]
 
@@ -68,16 +68,15 @@ class OllamaClient(LLMClient):
             kwargs["tools"] = tools_list
 
         if self._streaming:
-            await self._call_streaming(ollama_messages, kwargs, ctx)
-        else:
-            await self._call_non_streaming(ollama_messages, kwargs, ctx)
+            return await self._call_streaming(ollama_messages, kwargs, ctx)
+        return await self._call_non_streaming(ollama_messages, kwargs, ctx)
 
     async def _call_non_streaming(
         self,
         messages: list[dict[str, Any]],
         kwargs: dict[str, Any],
         ctx: Context,
-    ) -> None:
+    ) -> ModelResponse:
         response = await self._client.chat(
             model=self._model,
             messages=messages,
@@ -109,12 +108,10 @@ class OllamaClient(LLMClient):
             "total_tokens": (response.prompt_eval_count or 0) + (response.eval_count or 0),
         }
 
-        await ctx.send(
-            ModelResponse(
-                message=model_msg,
-                tool_calls=ToolCalls(calls=calls),
-                usage=usage_dict,
-            )
+        return ModelResponse(
+            message=model_msg,
+            tool_calls=ToolCalls(calls=calls),
+            usage=usage_dict,
         )
 
     async def _call_streaming(
@@ -122,7 +119,7 @@ class OllamaClient(LLMClient):
         messages: list[dict[str, Any]],
         kwargs: dict[str, Any],
         ctx: Context,
-    ) -> None:
+    ) -> ModelResponse:
         response_stream = await self._client.chat(
             model=self._model,
             messages=messages,
@@ -165,10 +162,8 @@ class OllamaClient(LLMClient):
             message = ModelMessage(content=full_content)
             await ctx.send(message)
 
-        await ctx.send(
-            ModelResponse(
-                message=message,
-                tool_calls=ToolCalls(calls=calls),
-                usage=usage_dict,
-            )
+        return ModelResponse(
+            message=message,
+            tool_calls=ToolCalls(calls=calls),
+            usage=usage_dict,
         )

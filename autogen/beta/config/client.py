@@ -6,7 +6,7 @@ from collections.abc import Iterable, Sequence
 from typing import Protocol, runtime_checkable
 
 from autogen.beta.context import Context
-from autogen.beta.events import BaseEvent
+from autogen.beta.events import BaseEvent, ModelResponse
 from autogen.beta.tools import Tool
 
 
@@ -18,4 +18,4 @@ class LLMClient(Protocol):
         ctx: Context,
         *,
         tools: Iterable[Tool],
-    ) -> None: ...
+    ) -> ModelResponse: ...
