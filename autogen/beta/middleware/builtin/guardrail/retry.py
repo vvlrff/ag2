@@ -34,10 +34,17 @@ class RetryOnGuardrail(Middleware):
         tools: list[Tool],
         next: Callable[..., Awaitable[ModelResponse]],
     ) -> ModelResponse:
+        current_messages = list(messages)
+        from autogen.beta.events import HumanMessage
+
         for attempt in range(self._max_retries + 1):
             try:
-                return await next(messages, ctx, tools)
+                return await next(current_messages, ctx, tools)
             except GuardrailTripped as e:
                 if attempt == self._max_retries:
                     raise
-                ctx.prompt.append(f"[Guardrail violation: {e}. Please try again.]")
+
+                # Inject feedback into the message history for the retry attempt
+                # instead of polluting the global system prompt.
+                feedback = HumanMessage(content=f"[Guardrail violation: {e}. Please try again.]")
+                current_messages.append(feedback)

@@ -34,8 +34,15 @@ class TokenLimiter(Middleware):
         next: Callable[..., Awaitable[ModelResponse]],
     ) -> ModelResponse:
         trimmed = list(messages)
-        while len(trimmed) > 1 and self._estimate_tokens(trimmed) > self._max_tokens:
-            trimmed.pop(0)
+        from autogen.beta.events import ModelRequest
+
+        if self._estimate_tokens(trimmed) > self._max_tokens:
+            first = trimmed[0]
+            has_request = isinstance(first, ModelRequest)
+
+            while len(trimmed) > (2 if has_request else 1) and self._estimate_tokens(trimmed) > self._max_tokens:
+                trimmed.pop(1 if has_request else 0)
+
         return await next(trimmed, ctx, tools)
 
     def _estimate_tokens(self, messages: list[BaseEvent]) -> int:

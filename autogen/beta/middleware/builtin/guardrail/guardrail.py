@@ -46,7 +46,12 @@ def guardrail(func: Callable[..., Awaitable[None]]) -> Middleware:
             next: Callable[..., Awaitable[ModelResponse]],
         ) -> ModelResponse:
             response = await next(messages, ctx, tools)
-            await func(response, ctx)
+            try:
+                await func(response, ctx)
+            except GuardrailTripped as e:
+                if e.response is None:
+                    e.response = response
+                raise
             return response
 
     mw = _Guardrail()

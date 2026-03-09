@@ -7,7 +7,7 @@ import logging
 
 import pytest
 
-from autogen.beta.events import ModelMessage, ModelResponse, ToolCall, ToolResult
+from autogen.beta.events import HumanMessage, ModelMessage, ModelRequest, ModelResponse, ToolCall, ToolResult
 from autogen.beta.middleware.base import _build_chain
 from autogen.beta.middleware.builtin import (
     GuardrailTripped,
@@ -63,6 +63,41 @@ async def test_history_limiter_truncates():
     chain = _build_chain([mw], "on_llm_call", capture)
     await chain(messages, _FakeCtx(), [])
     assert len(captured["messages"]) == 3
+
+
+@pytest.mark.asyncio
+async def test_history_limiter_preserves_first_request():
+    mw = HistoryLimiter(max_events=3)
+    request = ModelRequest(message=HumanMessage(content="original goal"))
+    filler = [_make_response(f"r{i}") for i in range(5)]
+    messages = [request] + filler
+    captured = {}
+
+    async def capture(messages, ctx, tools):
+        captured["messages"] = messages
+        return _make_response()
+
+    chain = _build_chain([mw], "on_llm_call", capture)
+    await chain(messages, _FakeCtx(), [])
+    assert len(captured["messages"]) == 3
+    assert captured["messages"][0] is request
+
+
+@pytest.mark.asyncio
+async def test_history_limiter_max_events_one():
+    """With max_events=1, should not duplicate or return all messages."""
+    mw = HistoryLimiter(max_events=1)
+    request = ModelRequest(message=HumanMessage(content="goal"))
+    messages = [request, _make_response("r1"), _make_response("r2")]
+    captured = {}
+
+    async def capture(messages, ctx, tools):
+        captured["messages"] = messages
+        return _make_response()
+
+    chain = _build_chain([mw], "on_llm_call", capture)
+    await chain(messages, _FakeCtx(), [])
+    assert len(captured["messages"]) == 1
 
 
 @pytest.mark.asyncio
@@ -214,6 +249,7 @@ async def test_guardrail_tripped_stores_response():
 @pytest.mark.asyncio
 async def test_retry_on_guardrail():
     call_count = 0
+    captured_messages = []
 
     @guardrail
     async def strict_check(response, ctx):
@@ -222,13 +258,23 @@ async def test_retry_on_guardrail():
         if call_count < 2:
             raise GuardrailTripped("try again")
 
+    async def capture_llm(messages, ctx, tools):
+        captured_messages.append(list(messages))
+        return _make_response()
+
     mw = RetryOnGuardrail(max_retries=3)
-    chain = _build_chain([mw, strict_check], "on_llm_call", _base_llm)
+    chain = _build_chain([mw, strict_check], "on_llm_call", capture_llm)
     ctx = _FakeCtx()
     result = await chain([], ctx, [])
     assert result.message.content == "ok"
     assert call_count == 2
-    assert len(ctx.prompt) == 1
+    # First call: empty messages
+    assert len(captured_messages[0]) == 0
+    # Second call: includes feedback message
+    assert len(captured_messages[1]) == 1
+    assert "try again" in captured_messages[1][0].content
+    # Ensure system prompt was NOT polluted
+    assert len(ctx.prompt) == 0
 
 
 @pytest.mark.asyncio

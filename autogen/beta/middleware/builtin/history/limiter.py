@@ -28,6 +28,15 @@ class HistoryLimiter(Middleware):
         tools: list[Tool],
         next: Callable[..., Awaitable[ModelResponse]],
     ) -> ModelResponse:
-        if len(messages) > self._max_events:
-            messages = messages[-self._max_events :]
-        return await next(messages, ctx, tools)
+        if len(messages) <= self._max_events:
+            return await next(messages, ctx, tools)
+
+        from autogen.beta.events import ModelRequest
+
+        first = messages[0]
+        if isinstance(first, ModelRequest) and self._max_events >= 2:
+            trimmed = [first] + messages[-(self._max_events - 1) :]
+        else:
+            trimmed = messages[-self._max_events :]
+
+        return await next(trimmed, ctx, tools)
