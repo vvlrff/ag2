@@ -33,7 +33,7 @@ from autogen.beta.events import (
 )
 from autogen.beta.tools import Tool
 
-from .mappers import tool_to_api
+from .mappers import tool_to_responses_api
 
 
 class CreateOptions(TypedDict, total=False):
@@ -97,7 +97,7 @@ class OpenAIResponsesClient(LLMClient):
             **self._create_options,
             input=input_items,
             instructions=instructions,
-            tools=[tool_to_api(t) for t in tools] or omit,
+            tools=[tool_to_responses_api(t) for t in tools] or omit,
         )
 
         if self._streaming:
