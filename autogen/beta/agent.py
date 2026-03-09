@@ -4,12 +4,11 @@
 
 import warnings
 from collections.abc import Awaitable, Callable, Iterable
-from contextlib import AsyncExitStack, ExitStack
+from contextlib import AsyncExitStack
+from functools import partial
 from typing import TYPE_CHECKING, Any, Protocol, TypeAlias, overload
 
 from fast_depends import Provider
-
-from autogen.beta.utils import CONTEXT_OPTION_NAME, build_model
 
 from .annotations import Context
 from .config import LLMClient, ModelConfig
@@ -23,8 +22,10 @@ from .events import (
 from .exceptions import ConfigNotProvidedError
 from .history import History
 from .hitl import HumanHook, default_hitl_hook, wrap_hitl
+from .middlewares.base import AgentTurn, BaseMiddleware, MiddlewareFactory
 from .stream import MemoryStream, Stream
 from .tools import FunctionParameters, FunctionTool, Tool, ToolExecutor, tool
+from .utils import CONTEXT_OPTION_NAME, build_model
 
 if TYPE_CHECKING:
     from .conversable import ConversableAdapter
@@ -100,6 +101,7 @@ class Agent(Askable):
         config: ModelConfig | None = None,
         hitl_hook: HumanHook | None = None,
         tools: Iterable[Callable[..., Any] | Tool] = (),
+        middlewares: Iterable["MiddlewareFactory"] = (),
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
     ):
@@ -109,6 +111,7 @@ class Agent(Askable):
         self._agent_dependencies = dependencies or {}
         self._agent_variables = variables or {}
 
+        self._middlewares = middlewares
         self.dependency_provider = Provider()
         self.tools = [FunctionTool.ensure_tool(t, provider=self.dependency_provider) for t in tools]
 
@@ -262,7 +265,10 @@ class Agent(Askable):
     ) -> "Conversation":
         all_tools = self.tools + list(additional_tools)
 
-        async def _call_client(event: BaseEvent, ctx: Context) -> None:
+        async def _call_client(
+            event: ModelRequest | ToolResults,
+            ctx: Context,
+        ) -> None:
             await client(
                 *await ctx.stream.history.get_events(),
                 ctx=ctx,
@@ -270,7 +276,14 @@ class Agent(Askable):
             )
             return None
 
-        with ExitStack() as stack:
+        middlewares: list[BaseMiddleware] = []
+        async with AsyncExitStack() as stack:
+            agent_turn: AgentTurn = _execute_turn
+            for m in reversed(self._middlewares):
+                middleware = m(event, ctx)
+                middlewares.append(middleware)
+                agent_turn = partial(middleware.on_turn, agent_turn)
+
             stack.enter_context(
                 ctx.stream.where(ModelRequest | ToolResults).sub_scope(_call_client),
             )
@@ -279,16 +292,13 @@ class Agent(Askable):
                 ctx.stream.where(HumanInputRequest).sub_scope(self.__hitl_hook),
             )
 
-            self.__tool_executor.register(stack, ctx, tools=all_tools)
+            self.__tool_executor.register(
+                stack,
+                ctx,
+                tools=all_tools,
+            )
 
-            async with ctx.stream.get(ModelResponse) as result:
-                await ctx.send(event)
-                message = await result
-
-            while message.tool_calls and not message.response_force:
-                async with ctx.stream.get(ModelResponse) as result:
-                    await ctx.send(message.tool_calls)
-                    message = await result
+            message = await agent_turn(event, ctx)
 
             return Conversation(
                 message,
@@ -301,6 +311,19 @@ class Agent(Askable):
         from .conversable import ConversableAdapter
 
         return ConversableAdapter(self)
+
+
+async def _execute_turn(event: BaseEvent, ctx: Context) -> ModelResponse:
+    async with ctx.stream.get(ModelResponse) as result:
+        await ctx.send(event)
+        message = await result
+
+    while message.tool_calls and not message.response_force:
+        async with ctx.stream.get(ModelResponse) as result:
+            await ctx.send(message.tool_calls)
+            message = await result
+
+    return message
 
 
 def _wrap_prompt_hook(func: PromptHook) -> Callable[[ModelRequest, Context], Awaitable[str]]:

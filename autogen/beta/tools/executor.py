@@ -23,7 +23,13 @@ from .tool import Tool
 
 
 class ToolExecutor:
-    def register(self, stack: "ExitStack", ctx: "Context", *, tools: Iterable[Tool] = ()) -> None:
+    def register(
+        self,
+        stack: "ExitStack",
+        ctx: "Context",
+        *,
+        tools: Iterable[Tool] = (),
+    ) -> None:
         stack.enter_context(ctx.stream.where(ToolCalls).sub_scope(self.execute_tools))
 
         known_tools: set[str] = set()

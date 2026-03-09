@@ -19,11 +19,21 @@ class ToolCalls(BaseEvent):
     def to_api(self) -> list[dict[str, Any]]:
         return [c.to_api() for c in self.calls]
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ToolCalls):
+            return NotImplemented
+        return self.calls == other.calls
+
 
 class ToolResults(BaseEvent):
     """Container event holding results (or errors) produced by tools."""
 
     results: list["ToolResult | ToolError"]
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ToolResults):
+            return NotImplemented
+        return self.results == other.results
 
 
 class ToolEvent(BaseEvent):
@@ -46,6 +56,11 @@ class ToolCall(ToolEvent):
                 "name": self.name,
             },
         }
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ToolCall):
+            return NotImplemented
+        return self.id == other.id and self.name == other.name and self.arguments == other.arguments
 
 
 class ClientToolCall(ToolCall):
@@ -72,6 +87,11 @@ class ToolResult(ToolEvent):
             "content": self.content,
         }
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ToolResult):
+            return NotImplemented
+        return self.parent_id == other.parent_id and self.name == other.name and self.content == other.content
+
 
 class ToolError(ToolResult):
     """Represents a failed tool execution with an associated error."""
@@ -80,6 +100,18 @@ class ToolError(ToolResult):
     name: str
     content: str
     error: Exception
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ToolError):
+            return NotImplemented
+        # Compare error types and messages to avoid relying on identity.
+        same_error = type(self.error) is type(other.error) and str(self.error) == str(other.error)
+        return (
+            self.parent_id == other.parent_id
+            and self.name == other.name
+            and self.content == other.content
+            and same_error
+        )
 
 
 class ToolNotFoundEvent(ToolError):  # noqa: N818
@@ -90,6 +122,11 @@ class ModelRequest(BaseEvent):
     """Event representing an input request sent to the model."""
 
     content: str
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ModelRequest):
+            return NotImplemented
+        return self.content == other.content
 
     def to_api(self) -> dict[str, Any]:
         return {
@@ -107,11 +144,21 @@ class ModelReasoning(ModelEvent):
 
     content: str
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ModelReasoning):
+            return NotImplemented
+        return self.content == other.content
+
 
 class ModelMessage(ModelEvent):
     """Single message emitted by the model."""
 
     content: str
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ModelMessage):
+            return NotImplemented
+        return self.content == other.content
 
 
 class ModelResponse(ModelEvent):
@@ -131,11 +178,26 @@ class ModelResponse(ModelEvent):
             msg["tool_calls"] = self.tool_calls.to_api()
         return msg
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ModelResponse):
+            return NotImplemented
+        return (
+            self.message == other.message
+            and self.tool_calls == other.tool_calls
+            and self.usage == other.usage
+            and self.response_force == other.response_force
+        )
+
 
 class ModelMessageChunk(ModelEvent):
     """Chunk of a streamed model message."""
 
     content: str
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, ModelMessageChunk):
+            return NotImplemented
+        return self.content == other.content
 
 
 class HumanInputRequest(BaseEvent):
@@ -143,8 +205,18 @@ class HumanInputRequest(BaseEvent):
 
     content: str
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, HumanInputRequest):
+            return NotImplemented
+        return self.content == other.content
+
 
 class HumanMessage(BaseEvent):
     """Event representing a human user's response."""
 
     content: str
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, HumanMessage):
+            return NotImplemented
+        return self.content == other.content

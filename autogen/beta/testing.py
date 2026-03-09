@@ -3,23 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from typing import Any
+from unittest.mock import MagicMock
 
 from autogen.beta import Context
 from autogen.beta.config import LLMClient, ModelConfig
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCall, ToolCalls, ToolError
-
-
-class TestConfig(ModelConfig):
-    __test__ = False
-
-    def __init__(self, *events: ModelResponse | ToolCall | str) -> None:
-        self.events = events
-
-    def copy(self) -> "TestConfig":
-        return self
-
-    def create(self) -> "TestConfig":
-        return TestClient(*self.events)
 
 
 class TestClient(LLMClient):
@@ -41,3 +29,38 @@ class TestClient(LLMClient):
             next_msg = ModelResponse(tool_calls=ToolCalls(calls=[next_msg]))
 
         await ctx.send(next_msg)
+
+
+class TrackingClient(LLMClient):
+    def __init__(self, client: LLMClient, mock: MagicMock) -> None:
+        self.client = client
+        self.mock = mock
+
+    async def __call__(self, *messages: BaseEvent, ctx: Context, **kwargs: Any) -> None:
+        self.mock(messages[-1])
+        return await self.client(*messages, ctx=ctx, **kwargs)
+
+
+class TrackingConfig(ModelConfig):
+    def __init__(self, config: ModelConfig) -> None:
+        self.config = config
+        self.mock = MagicMock()
+
+    def copy(self) -> "TrackingConfig":
+        return self
+
+    def create(self) -> TrackingClient:
+        return TrackingClient(self.config.create(), self.mock)
+
+
+class TestConfig(ModelConfig):
+    __test__ = False
+
+    def __init__(self, *events: ModelResponse | ToolCall | str) -> None:
+        self.events = events
+
+    def copy(self) -> "TestConfig":
+        return self
+
+    def create(self) -> "TestConfig":
+        return TestClient(*self.events)
