@@ -2,10 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from .base import AgentTurn, BaseMiddleware, Middleware
+from .base import AgentTurn, BaseMiddleware, Middleware, ToolExecution
 
 __all__ = (
     "AgentTurn",
     "BaseMiddleware",
     "Middleware",
+    "ToolExecution",
 )

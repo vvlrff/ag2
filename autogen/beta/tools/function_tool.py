@@ -2,19 +2,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import json
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from contextlib import AsyncExitStack, ExitStack
-from traceback import format_exc
+from functools import partial
 from typing import Any, overload
 
 from fast_depends import Provider
 from fast_depends.core import CallModel
-from fast_depends.pydantic import PydanticSerializer
 from fast_depends.pydantic.schema import get_schema
 
 from autogen.beta.annotations import Context
 from autogen.beta.events import ToolCall, ToolError, ToolResult
+from autogen.beta.middlewares import BaseMiddleware, ToolExecution
 from autogen.beta.utils import CONTEXT_OPTION_NAME, build_model
 
 from .schemas import FunctionDefinition, FunctionParameters, FunctionToolSchema
@@ -54,37 +53,44 @@ class FunctionTool(Tool):
         t.provider = provider
         return t
 
-    def register(self, stack: "ExitStack", ctx: "Context") -> None:
-        stack.enter_context(ctx.stream.where(ToolCall.name == self.name).sub_scope(self.execute))
+    def register(
+        self,
+        stack: "ExitStack",
+        ctx: "Context",
+        *,
+        middlewares: Iterable["BaseMiddleware"] = (),
+    ) -> None:
+        execution: ToolExecution = self
+        for middleware in middlewares:
+            execution = partial(middleware.on_tool_execution, execution)
 
-    async def execute(self, event: ToolCall, ctx: "Context") -> None:
+        async def execute(event: "ToolCall", ctx: "Context") -> None:
+            result = await execution(event, ctx)
+            await ctx.send(result)
+
+        stack.enter_context(ctx.stream.where(ToolCall.name == self.name).sub_scope(execute))
+
+    async def __call__(self, event: "ToolCall", ctx: "Context") -> "ToolResult":
         try:
             async with AsyncExitStack() as stack:
                 result = await self.model.asolve(
-                    **(json.loads(event.arguments) | {CONTEXT_OPTION_NAME: ctx}),
+                    **(event.serialized_arguments | {CONTEXT_OPTION_NAME: ctx}),
                     stack=stack,
                     cache_dependencies={},
                     dependency_provider=self.provider,
                 )
-                result = PydanticSerializer.encode(result)
 
-        except Exception as e:
-            await ctx.send(
-                ToolError(
-                    parent_id=event.id,
-                    name=event.name,
-                    content=format_exc(limit=3),
-                    error=e,
-                )
+            return ToolResult(
+                parent_id=event.id,
+                name=event.name,
+                raw_content=result,
             )
 
-        else:
-            await ctx.send(
-                ToolResult(
-                    parent_id=event.id,
-                    name=event.name,
-                    content=result.decode(),
-                )
+        except Exception as e:
+            return ToolError(
+                parent_id=event.id,
+                name=event.name,
+                error=e,
             )
 
 

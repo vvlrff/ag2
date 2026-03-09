@@ -2,26 +2,26 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from collections.abc import Iterable
 from contextlib import ExitStack
 from typing import Protocol, runtime_checkable
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import ToolCall
+from autogen.beta.middlewares import BaseMiddleware, ToolExecution
 
 from .schemas import FunctionToolSchema
 
 
 @runtime_checkable
-class Tool(Protocol):
+class Tool(Protocol, ToolExecution):
     name: str
     schema: FunctionToolSchema
 
-    def register(self, stack: "ExitStack", ctx: "Context") -> None:
+    def register(
+        self,
+        stack: "ExitStack",
+        ctx: "Context",
+        *,
+        middlewares: Iterable["BaseMiddleware"] = (),
+    ) -> None:
         pass
-
-    async def execute(self, event: "ToolCall", ctx: "Context") -> None:
-        """ToolCall event interruptor to execute tool.
-
-        Returns None to suppress futher event processing.
-        """
-        ...

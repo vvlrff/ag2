@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable
 from typing import Any, Protocol, TypeAlias
 
 from autogen.beta.annotations import Context
-from autogen.beta.events import BaseEvent, ModelResponse
+from autogen.beta.events import BaseEvent, ClientToolCall, ModelResponse, ToolCall, ToolError, ToolResult
 
 
 class MiddlewareFactory(Protocol):
@@ -33,6 +33,7 @@ class Middleware(MiddlewareFactory):
 
 
 AgentTurn: TypeAlias = Callable[["BaseEvent", "Context"], Awaitable["ModelResponse"]]
+ToolExecution: TypeAlias = Callable[["ToolCall", "Context"], Awaitable["ToolResult | ToolError | ClientToolCall"]]
 
 
 class BaseMiddleware:
@@ -50,4 +51,12 @@ class BaseMiddleware:
         event: "BaseEvent",
         ctx: "Context",
     ) -> "ModelResponse":
+        return await call_next(event, ctx)
+
+    async def on_tool_execution(
+        self,
+        call_next: ToolExecution,
+        event: "ToolCall",
+        ctx: "Context",
+    ) -> "ToolResult":
         return await call_next(event, ctx)

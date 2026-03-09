@@ -296,6 +296,7 @@ class Agent(Askable):
                 stack,
                 ctx,
                 tools=all_tools,
+                middlewares=middlewares,
             )
 
             message = await agent_turn(event, ctx)

@@ -1,8 +1,11 @@
+from collections.abc import Iterable
 from contextlib import ExitStack
+from functools import partial
 from typing import Any
 
 from autogen.beta.annotations import Context
 from autogen.beta.events import ClientToolCall, ToolCall
+from autogen.beta.middlewares import BaseMiddleware, ToolExecution
 
 from .schemas import FunctionToolSchema
 from .tool import Tool
@@ -18,11 +21,23 @@ class ClientTool(Tool):
         self.schema = FunctionToolSchema.model_validate(schema)
         self.name = self.schema.function.name
 
-    def register(self, stack: "ExitStack", ctx: "Context") -> None:
+    def register(
+        self,
+        stack: "ExitStack",
+        ctx: "Context",
+        *,
+        middlewares: Iterable["BaseMiddleware"] = (),
+    ) -> None:
+        execution: ToolExecution = self
+        for middleware in middlewares:
+            execution = partial(middleware.on_tool_execution, execution)
+
+        async def execute(event: "ToolCall", ctx: "Context") -> None:
+            return await execution(event, ctx)
+
         stack.enter_context(
-            ctx.stream.where((ToolCall.name == self.name) & ClientToolCall.not_()).sub_scope(self.execute),
+            ctx.stream.where((ToolCall.name == self.name) & ClientToolCall.not_()).sub_scope(execute),
         )
 
-    async def execute(self, event: "ToolCall", ctx: "Context") -> None:
-        ev = ClientToolCall.from_call(event)
-        await ctx.send(ev)
+    async def __call__(self, event: "ToolCall", ctx: "Context") -> "ClientToolCall":
+        return ClientToolCall.from_call(event)

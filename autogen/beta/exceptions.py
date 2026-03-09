@@ -7,11 +7,11 @@ class AG2Error(Exception):
     """Base exception for all AG2 beta errors."""
 
 
-class ToolError(AG2Error):
+class ToolExecutionError(AG2Error):
     """Base exception for tool-related errors."""
 
 
-class ToolNotFoundError(ToolError):
+class ToolNotFoundError(ToolExecutionError):
     """Raised when a requested tool cannot be found."""
 
     def __init__(self, name: str):

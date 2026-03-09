@@ -20,7 +20,7 @@ async def test_execute(async_mock: AsyncMock, mock: AsyncMock) -> None:
         mock(a=a, b=b)
         return "tool executed"
 
-    await my_func.execute(
+    result = await my_func(
         events.ToolCall(
             arguments=json.dumps({"a": "1", "b": "1"}),
             name="my_func",
@@ -28,9 +28,7 @@ async def test_execute(async_mock: AsyncMock, mock: AsyncMock) -> None:
         ctx=Context(async_mock),
     )
 
-    tool_result: events.ToolResult = async_mock.send.await_args_list[0][0][0]
-    assert tool_result.content == '"tool executed"'
-
+    assert result.content == '"tool executed"'
     mock.assert_called_once_with(a="1", b=1)
 
 
@@ -41,7 +39,7 @@ async def test_execute_sync_without_thread(async_mock: AsyncMock, mock: MagicMoc
         mock(a=a, b=b)
         return "tool executed"
 
-    await my_func.execute(
+    result = await my_func(
         events.ToolCall(
             arguments=json.dumps({"a": "1", "b": "1"}),
             name="my_func",
@@ -49,9 +47,7 @@ async def test_execute_sync_without_thread(async_mock: AsyncMock, mock: MagicMoc
         ctx=Context(async_mock),
     )
 
-    tool_result: events.ToolResult = async_mock.send.await_args_list[0][0][0]
-    assert tool_result.content == '"tool executed"'
-
+    assert result.content == '"tool executed"'
     mock.assert_called_once_with(a="1", b=1)
 
 
@@ -62,7 +58,7 @@ async def test_execute_async(async_mock: AsyncMock, mock: MagicMock) -> None:
         mock(a=a, b=b)
         return "tool executed"
 
-    await my_func.execute(
+    result = await my_func(
         events.ToolCall(
             arguments=json.dumps({"a": "1", "b": "1"}),
             name="my_func",
@@ -70,9 +66,7 @@ async def test_execute_async(async_mock: AsyncMock, mock: MagicMock) -> None:
         ctx=Context(async_mock),
     )
 
-    tool_result: events.ToolResult = async_mock.send.await_args_list[0][0][0]
-    assert tool_result.content == '"tool executed"'
-
+    assert result.content == '"tool executed"'
     mock.assert_called_once_with(a="1", b=1)
 
 
@@ -85,7 +79,7 @@ async def test_return_model(async_mock: AsyncMock, mock: MagicMock) -> None:
     def my_func(a: str, b: int) -> Result:
         return Result(a=a)
 
-    await my_func.execute(
+    result = await my_func(
         events.ToolCall(
             arguments=json.dumps({"a": "1", "b": "1"}),
             name="my_func",
@@ -93,8 +87,7 @@ async def test_return_model(async_mock: AsyncMock, mock: MagicMock) -> None:
         ctx=Context(async_mock),
     )
 
-    tool_result: events.ToolResult = async_mock.send.await_args_list[0][0][0]
-    assert tool_result.content == '{"a":"1"}'
+    assert result.content == '{"a":"1"}'
 
 
 @pytest.mark.asyncio
@@ -106,7 +99,7 @@ async def test_tool_with_depends(async_mock: AsyncMock, mock: MagicMock) -> None
     def my_func(a: str, b: Annotated[str, Depends(dep)]) -> str:
         return a + b
 
-    await my_func.execute(
+    result = await my_func(
         events.ToolCall(
             arguments=json.dumps({"a": "1"}),
             name="my_func",
@@ -114,8 +107,7 @@ async def test_tool_with_depends(async_mock: AsyncMock, mock: MagicMock) -> None
         ctx=Context(async_mock),
     )
 
-    tool_result: events.ToolResult = async_mock.send.await_args_list[0][0][0]
-    assert tool_result.content == '"111"'
+    assert result.content == '"111"'
 
 
 @pytest.mark.asyncio
@@ -124,7 +116,7 @@ async def test_tool_get_context(async_mock: AsyncMock, mock: MagicMock) -> None:
     def my_func(a: str, ctx: Context) -> str:
         return "".join(ctx.prompt)
 
-    await my_func.execute(
+    result = await my_func(
         events.ToolCall(
             arguments=json.dumps({"a": "1"}),
             name="my_func",
@@ -132,8 +124,7 @@ async def test_tool_get_context(async_mock: AsyncMock, mock: MagicMock) -> None:
         ctx=Context(async_mock, prompt=["1"]),
     )
 
-    tool_result: events.ToolResult = async_mock.send.await_args_list[0][0][0]
-    assert tool_result.content == '"1"'
+    assert result.content == '"1"'
 
 
 @pytest.mark.asyncio
@@ -142,7 +133,7 @@ async def test_tool_get_context_by_random_name(async_mock: AsyncMock, mock: Magi
     def my_func(a: str, c: Context) -> str:
         return "".join(c.prompt)
 
-    await my_func.execute(
+    result = await my_func(
         events.ToolCall(
             arguments=json.dumps({"a": "1"}),
             name="my_func",
@@ -150,5 +141,4 @@ async def test_tool_get_context_by_random_name(async_mock: AsyncMock, mock: Magi
         ctx=Context(async_mock, prompt=["1"]),
     )
 
-    tool_result: events.ToolResult = async_mock.send.await_args_list[0][0][0]
-    assert tool_result.content == '"1"'
+    assert result.content == '"1"'

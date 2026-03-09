@@ -2,8 +2,12 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import json
+from traceback import format_exc
 from typing import Any
 from uuid import uuid4
+
+from fast_depends.pydantic import PydanticSerializer
 
 from .base import BaseEvent, Field
 
@@ -47,12 +51,24 @@ class ToolCall(ToolEvent):
     name: str
     arguments: str = "{}"
 
+    _serialized_arguments: dict[str, Any] = Field(default_factory=dict)
+
+    @property
+    def serialized_arguments(self) -> dict[str, Any]:
+        if not self._serialized_arguments:
+            self._serialized_arguments = json.loads(self.arguments)
+        return self._serialized_arguments
+
+    @serialized_arguments.setter
+    def serialized_arguments(self, value: dict[str, Any]) -> None:
+        self._serialized_arguments = value
+
     def to_api(self) -> dict[str, Any]:
         return {
             "id": self.id,
             "type": "function",
             "function": {
-                "arguments": self.arguments,
+                "arguments": json.dumps(self.serialized_arguments),
                 "name": self.name,
             },
         }
@@ -78,7 +94,19 @@ class ToolResult(ToolEvent):
 
     parent_id: str
     name: str
-    content: str
+
+    raw_content: Any = None
+    _content: str = Field(default_factory=str)
+
+    @property
+    def content(self) -> str:
+        if not self._content:
+            self._content = PydanticSerializer.encode(self.raw_content).decode()
+        return self._content
+
+    @content.setter
+    def content(self, value: str) -> None:
+        self._content = value
 
     def to_api(self) -> dict[str, Any]:
         return {
@@ -96,10 +124,17 @@ class ToolResult(ToolEvent):
 class ToolError(ToolResult):
     """Represents a failed tool execution with an associated error."""
 
-    parent_id: str
-    name: str
-    content: str
     error: Exception
+
+    @property
+    def content(self) -> str:
+        if not self._content:
+            self._content = format_exc(limit=3)
+        return self._content
+
+    @content.setter
+    def content(self, value: str) -> None:
+        self._content = value
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, ToolError):
