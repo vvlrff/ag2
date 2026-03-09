@@ -9,6 +9,7 @@ from .schemas import FunctionDefinition, FunctionParameters, FunctionToolSchema
 from .tool import Tool
 
 __all__ = (
+    "BuiltinTool",
     "ClientTool",
     "FunctionDefinition",
     "FunctionParameters",

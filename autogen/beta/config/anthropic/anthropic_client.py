@@ -17,6 +17,7 @@ from anthropic.types import (
 
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context
+from autogen.beta.builtin_tools import BuiltinTool
 from autogen.beta.events import (
     BaseEvent,
     ModelMessage,
@@ -28,7 +29,7 @@ from autogen.beta.events import (
 )
 from autogen.beta.tools import Tool
 
-from .mappers import convert_messages, tool_to_api
+from .mappers import builtin_tool_to_anthropic_params, convert_messages, tool_to_api
 
 
 class CreateOptions(TypedDict, total=False):
@@ -74,6 +75,7 @@ class AnthropicClient(LLMClient):
         ctx: Context,
         *,
         tools: Iterable[Tool],
+        builtin_tools: Iterable[BuiltinTool] = (),
     ) -> ModelResponse:
         anthropic_messages = convert_messages(messages)
 
@@ -86,6 +88,7 @@ class AnthropicClient(LLMClient):
             self._inject_cache_control(anthropic_messages)
 
         tools_list = [tool_to_api(t) for t in tools]
+        tools_list += [p for bt in builtin_tools if (p := builtin_tool_to_anthropic_params(bt)) is not None]
 
         if self._streaming:
             async with self._client.messages.stream(
@@ -126,7 +129,7 @@ class AnthropicClient(LLMClient):
         response: Message,
         ctx: Context,
     ) -> ModelResponse:
-        model_msg: ModelMessage | None = None
+        full_content: str = ""
         calls: list[ToolCall] = []
 
         for block in response.content:
@@ -135,8 +138,7 @@ class AnthropicClient(LLMClient):
                     await ctx.send(ModelReasoning(content=block.thinking))
 
             elif isinstance(block, TextBlock):
-                model_msg = ModelMessage(content=block.text)
-                await ctx.send(model_msg)
+                full_content += block.text
 
             elif isinstance(block, ToolUseBlock):
                 calls.append(
@@ -146,6 +148,11 @@ class AnthropicClient(LLMClient):
                         arguments=json.dumps(block.input),
                     )
                 )
+
+        model_msg: ModelMessage | None = None
+        if full_content:
+            model_msg = ModelMessage(content=full_content)
+            await ctx.send(model_msg)
 
         usage = response.usage.model_dump() if response.usage else {}
 

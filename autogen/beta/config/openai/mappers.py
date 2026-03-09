@@ -5,8 +5,32 @@
 from collections.abc import Iterable, Sequence
 from typing import Any
 
+from autogen.beta.builtin_tools import BuiltinTool
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
 from autogen.beta.tools import Tool
+
+
+def builtin_tool_to_responses_params(tool: BuiltinTool) -> dict[str, Any] | None:
+    """Convert a BuiltinTool to the OpenAI Responses API tool dict.
+
+    Returns ``None`` for tools not supported by the Responses API.
+    """
+    if tool.kind == "web_search":
+        version = getattr(tool, "openai_version", "web_search_preview")
+        params: dict[str, Any] = {
+            "type": version,
+            "search_context_size": getattr(tool, "search_context_size", "medium"),
+        }
+        if loc := getattr(tool, "user_location", None):
+            params["user_location"] = {"type": "approximate", **loc}
+        if allowed := getattr(tool, "allowed_domains", None):
+            params["allowed_domains"] = allowed
+        return params
+    if tool.kind == "code_execution":
+        container_id = getattr(tool, "container_id", None)
+        container = container_id if container_id else {"type": "auto"}
+        return {"type": "code_interpreter", "container": container}
+    return None
 
 
 def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, Any]]:

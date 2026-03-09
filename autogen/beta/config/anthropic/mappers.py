@@ -5,8 +5,32 @@
 import json
 from typing import Any
 
+from autogen.beta.builtin_tools import BuiltinTool
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
 from autogen.beta.tools import Tool
+
+
+def builtin_tool_to_anthropic_params(tool: BuiltinTool) -> dict[str, Any] | None:
+    """Convert a BuiltinTool to the Anthropic Messages API tool dict.
+
+    Returns ``None`` for tools not supported by Anthropic.
+    """
+    if tool.kind == "web_search":
+        version = getattr(tool, "anthropic_version", "web_search_20260209")
+        params: dict[str, Any] = {"type": version, "name": "web_search"}
+        if (max_uses := getattr(tool, "max_uses", None)) is not None:
+            params["max_uses"] = max_uses
+        if allowed := getattr(tool, "allowed_domains", None):
+            params["allowed_domains"] = allowed
+        if blocked := getattr(tool, "blocked_domains", None):
+            params["blocked_domains"] = blocked
+        if loc := getattr(tool, "user_location", None):
+            params["user_location"] = {"type": "approximate", **loc}
+        return params
+    if tool.kind == "code_execution":
+        version = getattr(tool, "anthropic_version", "code_execution_20250825")
+        return {"type": version, "name": "code_execution"}
+    return None
 
 
 def tool_to_api(t: Tool) -> dict[str, Any]:

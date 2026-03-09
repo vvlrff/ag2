@@ -25,6 +25,7 @@ from .hitl import HumanHook, default_hitl_hook, wrap_hitl
 from .middlewares.base import AgentTurn, BaseMiddleware, LLMCall, MiddlewareFactory
 from .stream import MemoryStream, Stream
 from .tools import FunctionParameters, FunctionTool, Tool, ToolExecutor, tool
+from .builtin_tools import BuiltinTool
 from .utils import CONTEXT_OPTION_NAME, build_model
 
 if TYPE_CHECKING:
@@ -63,6 +64,7 @@ class Conversation(Askable):
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
         tools: Iterable[Tool] = (),
+        builtin_tools: Iterable[BuiltinTool] = (),
     ) -> "Conversation":
         initial_event = ModelRequest(content=msg)
 
@@ -81,6 +83,7 @@ class Conversation(Askable):
             ctx=ctx,
             client=client,
             additional_tools=tools,
+            additional_builtin_tools=builtin_tools,
         )
 
     @property
@@ -101,6 +104,7 @@ class Agent(Askable):
         config: ModelConfig | None = None,
         hitl_hook: HumanHook | None = None,
         tools: Iterable[Callable[..., Any] | Tool] = (),
+        builtin_tools: Iterable[BuiltinTool] = (),
         middlewares: Iterable["MiddlewareFactory"] = (),
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
@@ -114,6 +118,7 @@ class Agent(Askable):
         self._middlewares = middlewares
         self.dependency_provider = Provider()
         self.tools = [FunctionTool.ensure_tool(t, provider=self.dependency_provider) for t in tools]
+        self.builtin_tools = list(builtin_tools)
 
         self.__hitl_hook = wrap_hitl(hitl_hook) if hitl_hook else default_hitl_hook
         self.__tool_executor = ToolExecutor()
@@ -223,6 +228,7 @@ class Agent(Askable):
         dependencies: dict[Any, Any] | None = None,
         variables: dict[Any, Any] | None = None,
         tools: Iterable[Tool] = (),
+        builtin_tools: Iterable[BuiltinTool] = (),
     ) -> "Conversation":
         config = config or self.config
         if not config:
@@ -253,6 +259,7 @@ class Agent(Askable):
             ctx=ctx,
             client=client,
             additional_tools=tools,
+            additional_builtin_tools=builtin_tools,
         )
 
     async def _execute(
@@ -262,12 +269,14 @@ class Agent(Askable):
         ctx: Context,
         client: LLMClient,
         additional_tools: Iterable[Tool] = (),
+        additional_builtin_tools: Iterable[BuiltinTool] = (),
     ) -> "Conversation":
         all_tools = self.tools + list(additional_tools)
+        all_builtin_tools = self.builtin_tools + list(additional_builtin_tools)
 
         middlewares: list[BaseMiddleware] = []
         agent_turn: AgentTurn = _execute_turn
-        llm_call: LLMCall = partial(client, tools=all_tools)
+        llm_call: LLMCall = partial(client, tools=all_tools, builtin_tools=all_builtin_tools)
 
         for m in reversed(self._middlewares):
             middleware = m(event, ctx)

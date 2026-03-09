@@ -11,6 +11,7 @@ from openai.types.chat import ChatCompletion, ChatCompletionChunk
 
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context
+from autogen.beta.builtin_tools import BuiltinTool
 from autogen.beta.events import (
     BaseEvent,
     ModelMessage,
@@ -98,8 +99,11 @@ class OpenAIClient(LLMClient):
         ctx: Context,
         *,
         tools: Iterable[Tool],
+        builtin_tools: Iterable[BuiltinTool] = (),
     ) -> ModelResponse:
         openai_messages = convert_messages(ctx.prompt, messages)
+        # Note: builtin_tools are not supported in the Chat Completions API.
+        # Use OpenAIResponsesConfig with OpenAIWebSearchTool for Responses API builtin tools.
 
         response = await self._client.chat.completions.create(
             **self._create_options,

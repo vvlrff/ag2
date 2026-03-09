@@ -20,6 +20,7 @@ from openai.types.responses import (
 
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context
+from autogen.beta.builtin_tools import BuiltinTool
 from autogen.beta.events import (
     BaseEvent,
     ModelMessage,
@@ -31,7 +32,7 @@ from autogen.beta.events import (
 )
 from autogen.beta.tools import Tool
 
-from .mappers import events_to_responses_input, tool_to_responses_api
+from .mappers import builtin_tool_to_responses_params, events_to_responses_input, tool_to_responses_api
 
 
 class CreateOptions(TypedDict, total=False):
@@ -88,15 +89,19 @@ class OpenAIResponsesClient(LLMClient):
         ctx: Context,
         *,
         tools: Iterable[Tool],
+        builtin_tools: Iterable[BuiltinTool] = (),
     ) -> ModelResponse:
         input_items = events_to_responses_input(messages)
         instructions = "\n\n".join(ctx.prompt) if ctx.prompt else None
+
+        all_tools = [tool_to_responses_api(t) for t in tools]
+        all_tools += [p for bt in builtin_tools if (p := builtin_tool_to_responses_params(bt)) is not None]
 
         response = await self._client.responses.create(
             **self._create_options,
             input=input_items,
             instructions=instructions,
-            tools=[tool_to_responses_api(t) for t in tools] or omit,
+            tools=all_tools or omit,
         )
 
         if self._streaming:
