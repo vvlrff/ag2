@@ -76,27 +76,27 @@ class WebSearchTool(BuiltinTool):
         ```python
         from autogen.beta import Agent
         from autogen.beta.config import AnthropicConfig, OpenAIResponsesConfig
-        from autogen.beta.builtin_tools import WebSearchTool
+        from autogen.beta.tools import WebSearchTool
 
         # Anthropic — latest version with dynamic filtering (default)
         agent = Agent(
             "searcher",
             config=AnthropicConfig("claude-sonnet-4-6"),
-            builtin_tools=[WebSearchTool(max_uses=3)],
+            tools=[WebSearchTool(max_uses=3)],
         )
 
         # Anthropic — basic version, ZDR-compatible
         agent = Agent(
             "searcher",
             config=AnthropicConfig("claude-haiku-4-5-20251001"),
-            builtin_tools=[WebSearchTool(anthropic_version="web_search_20250305")],
+            tools=[WebSearchTool(anthropic_version="web_search_20250305")],
         )
 
         # OpenAI — pinned version
         agent = Agent(
             "searcher",
             config=OpenAIResponsesConfig("gpt-4o-mini"),
-            builtin_tools=[WebSearchTool(
+            tools=[WebSearchTool(
                 openai_version="web_search_preview_2025_03_11",
                 search_context_size="low",
             )],

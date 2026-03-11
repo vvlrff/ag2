@@ -12,15 +12,16 @@ from openai.types.responses import (
     ResponseCompletedEvent,
     ResponseFunctionCallArgumentsDoneEvent,
     ResponseFunctionToolCall,
+    ResponseFunctionWebSearch,
     ResponseOutputMessage,
     ResponseReasoningItem,
     ResponseStreamEvent,
     ResponseTextDeltaEvent,
 )
 
+from autogen.beta.tools import BuiltinTool
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context
-from autogen.beta.builtin_tools import BuiltinTool
 from autogen.beta.events import (
     BaseEvent,
     ModelMessage,
@@ -89,19 +90,23 @@ class OpenAIResponsesClient(LLMClient):
         ctx: Context,
         *,
         tools: Iterable[Tool],
-        builtin_tools: Iterable[BuiltinTool] = (),
     ) -> ModelResponse:
         input_items = events_to_responses_input(messages)
         instructions = "\n\n".join(ctx.prompt) if ctx.prompt else None
 
-        all_tools = [tool_to_responses_api(t) for t in tools]
-        all_tools += [p for bt in builtin_tools if (p := builtin_tool_to_responses_params(bt)) is not None]
+        tools_list: list[dict[str, Any]] = []
+        for t in tools:
+            if isinstance(t, BuiltinTool):
+                if (p := builtin_tool_to_responses_params(t)) is not None:
+                    tools_list.append(p)
+            else:
+                tools_list.append(tool_to_responses_api(t))
 
         response = await self._client.responses.create(
             **self._create_options,
             input=input_items,
             instructions=instructions,
-            tools=all_tools or omit,
+            tools=tools_list or omit,
         )
 
         if self._streaming:
@@ -115,6 +120,7 @@ class OpenAIResponsesClient(LLMClient):
     ) -> ModelResponse:
         model_msg: ModelMessage | None = None
         calls: list[ToolCall] = []
+        web_search_calls = 0
 
         for item in response.output:
             if isinstance(item, ResponseReasoningItem):
@@ -137,7 +143,12 @@ class OpenAIResponsesClient(LLMClient):
                     )
                 )
 
+            elif isinstance(item, ResponseFunctionWebSearch) and item.status == "completed":
+                web_search_calls += 1
+
         usage = response.usage.model_dump() if response.usage else {}
+        if web_search_calls:
+            usage["web_search_calls"] = web_search_calls
 
         return ModelResponse(
             message=model_msg,

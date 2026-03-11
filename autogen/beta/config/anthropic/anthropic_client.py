@@ -15,9 +15,9 @@ from anthropic.types import (
     ToolUseBlock,
 )
 
+from autogen.beta.tools import BuiltinTool
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context
-from autogen.beta.builtin_tools import BuiltinTool
 from autogen.beta.events import (
     BaseEvent,
     ModelMessage,
@@ -75,7 +75,6 @@ class AnthropicClient(LLMClient):
         ctx: Context,
         *,
         tools: Iterable[Tool],
-        builtin_tools: Iterable[BuiltinTool] = (),
     ) -> ModelResponse:
         anthropic_messages = convert_messages(messages)
 
@@ -87,8 +86,13 @@ class AnthropicClient(LLMClient):
         if self._prompt_caching and anthropic_messages:
             self._inject_cache_control(anthropic_messages)
 
-        tools_list = [tool_to_api(t) for t in tools]
-        tools_list += [p for bt in builtin_tools if (p := builtin_tool_to_anthropic_params(bt)) is not None]
+        tools_list: list[dict[str, Any]] = []
+        for t in tools:
+            if isinstance(t, BuiltinTool):
+                if (p := builtin_tool_to_anthropic_params(t)) is not None:
+                    tools_list.append(p)
+            else:
+                tools_list.append(tool_to_api(t))
 
         if self._streaming:
             async with self._client.messages.stream(

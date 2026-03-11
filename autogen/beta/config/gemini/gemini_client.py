@@ -10,9 +10,9 @@ from typing import Any, TypedDict
 from google import genai
 from google.genai import types
 
+from autogen.beta.tools import BuiltinTool
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import Context
-from autogen.beta.builtin_tools import BuiltinTool
 from autogen.beta.events import (
     BaseEvent,
     ModelMessage,
@@ -57,12 +57,17 @@ class GeminiClient(LLMClient):
         ctx: Context,
         *,
         tools: Iterable[Tool],
-        builtin_tools: Iterable[BuiltinTool] = (),
     ) -> ModelResponse:
-        bt_list = list(builtin_tools)
-        if bt_list:
+        regular_tools: list[Tool] = []
+        has_builtin = False
+        for t in tools:
+            if isinstance(t, BuiltinTool):
+                has_builtin = True
+            else:
+                regular_tools.append(t)
+        if has_builtin:
             warnings.warn(
-                "builtin_tools are not yet supported for GeminiClient and will be ignored. "
+                "BuiltinTool instances are not yet supported for GeminiClient and will be ignored. "
                 "Use AnthropicConfig or OpenAIResponsesConfig for builtin tool support.",
                 stacklevel=2,
             )
@@ -70,7 +75,7 @@ class GeminiClient(LLMClient):
         contents = convert_messages(messages)
         system_instruction = "\n\n".join(ctx.prompt) if ctx.prompt else None
 
-        tool_declarations = [types.FunctionDeclaration(**tool_to_api(t)) for t in tools]
+        tool_declarations = [types.FunctionDeclaration(**tool_to_api(t)) for t in regular_tools]
         gemini_tools: list[Any] = [types.Tool(function_declarations=tool_declarations)] if tool_declarations else []
         gemini_tools = gemini_tools or None
 

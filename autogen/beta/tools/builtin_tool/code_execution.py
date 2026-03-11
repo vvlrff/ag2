@@ -50,34 +50,34 @@ class CodeExecutionTool(BuiltinTool):
 
         from autogen.beta import Agent
         from autogen.beta.config import AnthropicConfig, OpenAIResponsesConfig
-        from autogen.beta.builtin_tools import CodeExecutionTool
+        from autogen.beta.tools import CodeExecutionTool
 
         # Anthropic — latest Bash sandbox (default)
         agent = Agent(
             "coder",
             config=AnthropicConfig("claude-sonnet-4-6"),
-            builtin_tools=[CodeExecutionTool()],
+            tools=[CodeExecutionTool()],
         )
 
         # Anthropic — legacy Python-only sandbox
         agent = Agent(
             "coder",
             config=AnthropicConfig("claude-haiku-4-5-20251001"),
-            builtin_tools=[CodeExecutionTool(anthropic_version="code_execution_20250522")],
+            tools=[CodeExecutionTool(anthropic_version="code_execution_20250522")],
         )
 
         # OpenAI — ephemeral container, no setup needed
         agent = Agent(
             "coder",
             config=OpenAIResponsesConfig("gpt-4o"),
-            builtin_tools=[CodeExecutionTool()],
+            tools=[CodeExecutionTool()],
         )
 
         # OpenAI — reuse a persistent container across requests
         agent = Agent(
             "coder",
             config=OpenAIResponsesConfig("gpt-4o"),
-            builtin_tools=[CodeExecutionTool(container_id="cntr_abc123")],
+            tools=[CodeExecutionTool(container_id="cntr_abc123")],
         )
     """
 

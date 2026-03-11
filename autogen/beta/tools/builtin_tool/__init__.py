@@ -6,11 +6,11 @@ from .base import BuiltinTool
 from .code_execution import AnthropicCodeExecutionVersion, CodeExecutionTool
 from .web_search import AnthropicWebSearchVersion, OpenAIWebSearchVersion, WebSearchTool
 
-__all__ = [
+__all__ = (
     "AnthropicCodeExecutionVersion",
     "AnthropicWebSearchVersion",
     "BuiltinTool",
     "CodeExecutionTool",
     "OpenAIWebSearchVersion",
     "WebSearchTool",
-]
+)

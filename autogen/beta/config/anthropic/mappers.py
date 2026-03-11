@@ -5,7 +5,7 @@
 import json
 from typing import Any
 
-from autogen.beta.builtin_tools import BuiltinTool
+from autogen.beta.tools import BuiltinTool
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResults
 from autogen.beta.tools import Tool
 
