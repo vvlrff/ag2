@@ -196,7 +196,7 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         return result
 
     elif isinstance(t, CodeExecutionToolSchema):
-        # https://platform.openai.com/docs/api-reference/responses/create#responses-create-tools
+        # https://developers.openai.com/api/docs/guides/tools-code-interpreter
         return {"type": "code_interpreter", "container": {"type": "auto"}}
 
     elif isinstance(t, ShellToolSchema):
