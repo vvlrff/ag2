@@ -4,6 +4,17 @@
 
 from .code_execution import CodeExecutionTool
 from .memory import MemoryTool
+from .shell import ContainerAutoEnvironment, ContainerReferenceEnvironment, LocalEnvironment, NetworkPolicy, ShellTool
 from .web_search import UserLocation, WebSearchTool
 
-__all__ = ("CodeExecutionTool", "MemoryTool", "UserLocation", "WebSearchTool")
+__all__ = (
+    "CodeExecutionTool",
+    "ContainerAutoEnvironment",
+    "ContainerReferenceEnvironment",
+    "LocalEnvironment",
+    "MemoryTool",
+    "NetworkPolicy",
+    "ShellTool",
+    "UserLocation",
+    "WebSearchTool",
+)
