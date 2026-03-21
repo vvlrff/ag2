@@ -157,9 +157,7 @@ def test_tool_to_responses_api_shell_container_auto() -> None:
 
 def test_tool_to_responses_api_shell_container_auto_with_network_policy() -> None:
     schema = ShellToolSchema(
-        environment=ContainerAutoEnvironment(
-            network_policy=NetworkPolicy(allowed_domains=["example.com"])
-        )
+        environment=ContainerAutoEnvironment(network_policy=NetworkPolicy(allowed_domains=["example.com"]))
     )
 
     result = tool_to_responses_api(schema)

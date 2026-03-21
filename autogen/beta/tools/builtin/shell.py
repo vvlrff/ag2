@@ -5,7 +5,6 @@
 from collections.abc import Iterable
 from contextlib import ExitStack
 from dataclasses import dataclass, field
-from typing import Union
 
 from autogen.beta.annotations import Context, Variable
 from autogen.beta.middleware import BaseMiddleware
@@ -45,7 +44,7 @@ class LocalEnvironment:
     """Commands execute in the local runtime (client-side, OpenAI)."""
 
 
-ShellEnvironment = Union[ContainerAutoEnvironment, ContainerReferenceEnvironment, LocalEnvironment]
+ShellEnvironment = ContainerAutoEnvironment | ContainerReferenceEnvironment | LocalEnvironment
 
 
 @dataclass(slots=True)
