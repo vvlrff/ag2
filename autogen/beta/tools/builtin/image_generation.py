@@ -55,7 +55,6 @@ class ImageGenerationTool(Tool):
         output_format: Literal["png", "jpeg", "webp"] | None = None,
         output_compression: int | None = None,
         partial_images: int | None = None,
-        supported_models: frozenset[str] | None = None,
     ) -> None:
         self._params: dict[str, object] = {}
         if quality is not None:
@@ -70,7 +69,6 @@ class ImageGenerationTool(Tool):
             self._params["output_compression"] = output_compression
         if partial_images is not None:
             self._params["partial_images"] = partial_images
-        self._supported_models = supported_models
 
     async def schemas(self, context: "Context") -> list[ImageGenerationToolSchema]:
         return [ImageGenerationToolSchema(**self._params)]
