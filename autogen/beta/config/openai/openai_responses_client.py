@@ -155,9 +155,8 @@ class OpenAIResponsesClient(LLMClient):
                     )
                 )
 
-            elif isinstance(item, ImageGenerationCall):
-                if item.result:
-                    images.append(base64.b64decode(item.result))
+            elif isinstance(item, ImageGenerationCall) and item.result:
+                images.append(base64.b64decode(item.result))
 
         usage = response.usage.model_dump() if response.usage else {}
 
@@ -205,9 +204,8 @@ class OpenAIResponsesClient(LLMClient):
                 finish_reason = event.response.status
                 resolved_model = event.response.model
                 for item in event.response.output:
-                    if isinstance(item, ImageGenerationCall):
-                        if item.result:
-                            images.append(base64.b64decode(item.result))
+                    if isinstance(item, ImageGenerationCall) and item.result:
+                        images.append(base64.b64decode(item.result))
 
         message: ModelMessage | None = None
         if full_content:

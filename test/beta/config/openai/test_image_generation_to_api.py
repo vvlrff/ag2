@@ -9,7 +9,6 @@ from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.tools.builtin.image_generation import ImageGenerationToolSchema
 
 
-
 def test_tool_to_api_image_generation_raises() -> None:
     schema = ImageGenerationToolSchema()
 

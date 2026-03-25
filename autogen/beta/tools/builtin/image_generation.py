@@ -44,7 +44,7 @@ class ImageGenerationTool(Tool):
         partial_images: Number of partial images to stream (1–3).
     """
 
-    __slots__ = ("_params")
+    __slots__ = "_params"
 
     def __init__(
         self,

@@ -52,7 +52,6 @@ async def test_tool_schemas_returns_single_schema() -> None:
     assert schema.size == "1536x1024"
 
 
-
 @pytest.mark.asyncio()
 async def test_reply_images_empty_by_default() -> None:
     agent = Agent("test", config=TestConfig(ModelResponse()))
@@ -84,4 +83,3 @@ async def test_reply_images_multiple() -> None:
     assert len(reply.images) == 2
     assert reply.images[0] == b"IMAGE_1"
     assert reply.images[1] == b"IMAGE_2"
-
