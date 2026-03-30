@@ -9,8 +9,8 @@ from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, ToolResu
 from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
-from autogen.beta.tools.builtin.shell import ContainerAutoEnvironment, ContainerReferenceEnvironment, ShellToolSchema
 from autogen.beta.tools.builtin.image_generation import ImageGenerationToolSchema
+from autogen.beta.tools.builtin.shell import ContainerAutoEnvironment, ContainerReferenceEnvironment, ShellToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema

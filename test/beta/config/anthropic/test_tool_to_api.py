@@ -102,6 +102,8 @@ def test_tool_to_api_shell_ignores_environment() -> None:
     result = tool_to_api(schema)
 
     assert result == {"type": "bash_20250124", "name": "bash"}
+
+
 def test_tool_to_api_web_search_with_allowed_domains() -> None:
     schema = WebSearchToolSchema(allowed_domains=["example.com", "trusteddomain.org"])
 
