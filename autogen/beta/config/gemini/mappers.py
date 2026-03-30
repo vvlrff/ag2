@@ -89,7 +89,7 @@ def convert_messages(
             for call in message.tool_calls.calls:
                 fc_part = types.Part.from_function_call(
                     name=call.name,
-                    args=json.loads(call.arguments),
+                    args=json.loads(call.arguments or "{}"),
                 )
                 if "thought_signature" in call.provider_data:
                     fc_part.thought_signature = call.provider_data["thought_signature"]
@@ -109,3 +109,15 @@ def convert_messages(
             result.append(types.Content(role="user", parts=parts_list))
 
     return result
+
+
+def normalize_usage(metadata: Any) -> dict[str, Any]:
+    """Build usage dict from Gemini UsageMetadata, normalizing to standard keys."""
+    usage: dict[str, Any] = {
+        "prompt_tokens": metadata.prompt_token_count,
+        "completion_tokens": metadata.candidates_token_count,
+        "total_tokens": metadata.total_token_count,
+    }
+    if metadata.cached_content_token_count:
+        usage["cache_read_input_tokens"] = metadata.cached_content_token_count
+    return usage
