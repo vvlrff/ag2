@@ -13,6 +13,11 @@ from .builtin import (
     NetworkPolicy,
     ShellTool,
     UserLocation,
+    ImageGenerationTool,
+    MemoryTool,
+    UserLocation,
+    WebFetchCitations,
+    WebFetchTool,
     WebSearchTool,
 )
 from .final import Toolkit, tool
@@ -22,12 +27,15 @@ __all__ = (
     "ContainerAutoEnvironment",
     "ContainerReferenceEnvironment",
     "LocalEnvironment",
+    "ImageGenerationTool",
     "MemoryTool",
     "NetworkPolicy",
     "ShellTool",
     "ToolResult",
     "Toolkit",
     "UserLocation",
+    "WebFetchCitations",
+    "WebFetchTool",
     "WebSearchTool",
     "tool",
 )

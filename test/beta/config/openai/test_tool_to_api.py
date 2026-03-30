@@ -188,3 +188,11 @@ def test_tool_to_responses_api_shell_local() -> None:
     result = tool_to_responses_api(schema)
 
     assert result == {"type": "shell", "environment": {"type": "local"}}
+def test_tool_to_responses_api_web_search_with_allowed_domains() -> None:
+    schema = WebSearchToolSchema(allowed_domains=["example.com", "docs.example.com"])
+    api_tool = tool_to_responses_api(schema)
+
+    assert api_tool == {
+        "type": "web_search",
+        "filters": {"allowed_domains": ["example.com", "docs.example.com"]},
+    }
