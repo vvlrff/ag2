@@ -8,7 +8,7 @@ from .agent import Agent, AgentReply
 from .annotations import Context, Inject, Variable
 from .response import PromptedSchema, ResponseSchema, response_schema
 from .stream import MemoryStream
-from .tools import ToolResult, tool
+from .tools import LocalShellEnvironment, LocalShellTool, ToolResult, tool
 
 __all__ = (
     "Agent",
@@ -16,6 +16,8 @@ __all__ = (
     "Context",
     "Depends",
     "Inject",
+    "LocalShellEnvironment",
+    "LocalShellTool",
     "MemoryStream",
     "PromptedSchema",
     "ResponseSchema",

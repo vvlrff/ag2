@@ -4,6 +4,7 @@
 
 from .client_tool import ClientTool
 from .function_tool import FunctionDefinition, FunctionParameters, FunctionTool, FunctionToolSchema, tool
+from .local_shell import LocalShellEnvironment, LocalShellTool
 from .toolkit import Toolkit
 
 __all__ = (
@@ -12,6 +13,8 @@ __all__ = (
     "FunctionParameters",
     "FunctionTool",
     "FunctionToolSchema",
+    "LocalShellEnvironment",
+    "LocalShellTool",
     "Toolkit",
     "tool",
 )

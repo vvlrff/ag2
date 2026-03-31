@@ -18,7 +18,7 @@ from .builtin import (
     WebFetchTool,
     WebSearchTool,
 )
-from .final import Toolkit, tool
+from .final import LocalShellEnvironment, LocalShellTool, Toolkit, tool
 
 __all__ = (
     "CodeExecutionTool",
@@ -26,6 +26,8 @@ __all__ = (
     "ContainerReferenceEnvironment",
     "ImageGenerationTool",
     "LocalEnvironment",
+    "LocalShellEnvironment",
+    "LocalShellTool",
     "MemoryTool",
     "NetworkPolicy",
     "ShellTool",
