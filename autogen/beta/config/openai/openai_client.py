@@ -1,4 +1,4 @@
-# Copyright (c) 2023 - 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
+# Copyright (c) 2026, AG2ai, Inc., AG2ai open-source projects maintainers and core contributors
 #
 # SPDX-License-Identifier: Apache-2.0
 
@@ -54,7 +54,6 @@ class CreateOptions(TypedDict, total=False):
     modalities: list[str] | None | Omit
     prediction: dict[str, Any] | None | Omit
     prompt_cache_key: str | Omit
-    prompt_cache_retention: str | None | Omit
     safety_identifier: str | Omit
     service_tier: str | None | Omit
     store: bool | None | Omit
