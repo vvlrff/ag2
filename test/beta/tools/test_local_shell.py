@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import json
+import sys
 from pathlib import Path
 
 import pytest
@@ -158,24 +159,34 @@ class TestShellExecution:
     @pytest.mark.asyncio
     async def test_env_merged_not_replaced(self, tmp_path: Path) -> None:
         """Extra env vars must be added on top of os.environ, not replace it."""
-        output_file = tmp_path / "out.txt"
+        # Write a helper script — avoids shell variable syntax differences
+        # between bash ($VAR) and cmd.exe (%VAR%) across platforms.
+        script = tmp_path / "check_env.py"
+        script.write_text(
+            "import os\n"
+            "custom = os.environ.get('MY_CUSTOM_VAR', 'MISSING')\n"
+            "path = os.environ.get('PATH', '')\n"
+            "print(custom + '|' + path)\n"
+        )
         shell = LocalShellTool(
             environment=LocalShellEnvironment(
                 path=tmp_path,
                 env={"MY_CUSTOM_VAR": "hello"},
             )
         )
-        # Write PATH and MY_CUSTOM_VAR to a file so we can inspect
-        cmd = f"echo $MY_CUSTOM_VAR:$PATH > {output_file}"
-        agent = Agent("a", config=self._make_config(cmd), tools=[shell])
-        await agent.ask("run it")
+        cmd = f'"{sys.executable}" check_env.py'
+        tool_results: list[str] = []
+        stream = MemoryStream()
+        stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
 
-        content = output_file.read_text().strip()
-        # MY_CUSTOM_VAR should be set
-        assert content.startswith("hello:")
-        # PATH should NOT be empty (env was merged, not replaced)
-        path_part = content.split(":", 1)[1]
-        assert len(path_part) > 0, "PATH was lost — env was replaced instead of merged"
+        agent = Agent("a", config=self._make_config(cmd), tools=[shell])
+        await agent.ask("run it", stream=stream)
+
+        assert tool_results, "No tool result received"
+        result = tool_results[0]
+        assert "hello|" in result, f"MY_CUSTOM_VAR not set: {result!r}"
+        path_part = result.split("|", 1)[1] if "|" in result else ""
+        assert path_part.strip(), f"PATH was lost — env was replaced instead of merged: {result!r}"
 
     # ── timeout ───────────────────────────────────────────────────────────────
 

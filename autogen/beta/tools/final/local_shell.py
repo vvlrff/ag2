@@ -197,7 +197,8 @@ def _check_ignore(command: str, workdir: Path, patterns: list[str]) -> str | Non
             continue
 
         try:
-            rel = str(resolved.relative_to(resolved_workdir))
+            # Normalize to forward slashes for cross-platform pattern matching.
+            rel = str(resolved.relative_to(resolved_workdir)).replace("\\", "/")
         except ValueError:
             # Path resolved outside workdir (e.g. "../../../etc/passwd" or an
             # absolute path).  Block it unconditionally — ignore patterns are
