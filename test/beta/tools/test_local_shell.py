@@ -12,7 +12,7 @@ from autogen.beta import Agent, LocalShellEnvironment, LocalShellTool, MemoryStr
 from autogen.beta.events import ToolCallEvent, ToolCallsEvent, ToolResultEvent
 from autogen.beta.events.types import ModelResponse
 from autogen.beta.testing import TestConfig
-from autogen.beta.tools.final.local_shell import _check_ignore, _matches
+from autogen.beta.tools.local.local_shell import _check_ignore, _matches
 
 
 class TestMatches:

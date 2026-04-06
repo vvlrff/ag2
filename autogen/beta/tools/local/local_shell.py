@@ -16,9 +16,8 @@ from pathlib import Path
 
 from autogen.beta.annotations import Context
 from autogen.beta.middleware import BaseMiddleware
+from autogen.beta.tools.final.function_tool import FunctionTool, tool
 from autogen.beta.tools.tool import Tool
-
-from .function_tool import FunctionTool, tool
 
 # Commands that only read state and never modify the filesystem.
 # Used when ``LocalShellEnvironment.readonly=True`` and no explicit ``allowed``

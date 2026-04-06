@@ -18,7 +18,8 @@ from .builtin import (
     WebFetchTool,
     WebSearchTool,
 )
-from .final import LocalShellEnvironment, LocalShellTool, Toolkit, tool
+from .final import Toolkit, tool
+from .local import LocalShellEnvironment, LocalShellTool
 
 __all__ = (
     "CodeExecutionTool",
