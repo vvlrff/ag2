@@ -13,82 +13,82 @@ from autogen.beta.events import ToolCallEvent, ToolCallsEvent, ToolResultEvent
 from autogen.beta.events.types import ModelResponse
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools import LocalShellEnvironment, LocalShellTool
-from autogen.beta.tools.shell.environment.local import _check_ignore, _matches
+from autogen.beta.tools.shell.environment.base import check_ignore, matches
 
 
 class TestMatches:
     def test_plain_prefix_matches(self) -> None:
-        assert _matches("git", "git status") is True
+        assert matches("git", "git status") is True
 
     def test_plain_prefix_no_match(self) -> None:
-        assert _matches("git", "rm -rf /") is False
+        assert matches("git", "rm -rf /") is False
 
     def test_multi_word_prefix(self) -> None:
-        assert _matches("uv run", "uv run pytest") is True
-        assert _matches("uv run", "uv add requests") is False
+        assert matches("uv run", "uv run pytest") is True
+        assert matches("uv run", "uv add requests") is False
 
     def test_rm_rf_blocked(self) -> None:
-        assert _matches("rm -rf", "rm -rf /") is True
-        assert _matches("rm -rf", "rm file.txt") is False
+        assert matches("rm -rf", "rm -rf /") is True
+        assert matches("rm -rf", "rm file.txt") is False
 
     def test_leading_whitespace_stripped(self) -> None:
-        assert _matches("git", "  git status") is True
+        assert matches("git", "  git status") is True
 
     def test_exact_command_matches(self) -> None:
         # "git" alone (no args) should match
-        assert _matches("git", "git") is True
+        assert matches("git", "git") is True
 
     def test_word_boundary_no_false_positive(self) -> None:
         # "git" must not match "gitconfig" or "gitfoo"
-        assert _matches("git", "gitconfig --list") is False
-        assert _matches("cat", "catchphrase") is False
-        assert _matches("py", "python3 app.py") is False
+        assert matches("git", "gitconfig --list") is False
+        assert matches("cat", "catchphrase") is False
+        assert matches("py", "python3 app.py") is False
 
 
 class TestCheckIgnore:
     def test_env_file_blocked(self, tmp_path: Path) -> None:
-        result = _check_ignore("cat .env", tmp_path, ["**/.env"])
+        result = check_ignore("cat .env", tmp_path, ["**/.env"])
         assert result is not None
         assert ".env" in result
 
     def test_key_file_blocked(self, tmp_path: Path) -> None:
-        result = _check_ignore("cat server.key", tmp_path, ["*.key"])
+        result = check_ignore("cat server.key", tmp_path, ["*.key"])
         assert result is not None
         assert "server.key" in result
 
     def test_secrets_dir_blocked(self, tmp_path: Path) -> None:
-        result = _check_ignore("cat secrets/db.key", tmp_path, ["secrets/**"])
+        result = check_ignore("cat secrets/db.key", tmp_path, ["secrets/**"])
         assert result is not None
         assert "secrets" in result
 
     def test_safe_file_allowed(self, tmp_path: Path) -> None:
-        result = _check_ignore("cat app.py", tmp_path, ["**/.env", "*.key"])
+        result = check_ignore("cat app.py", tmp_path, ["**/.env", "*.key"])
         assert result is None
 
     def test_quoted_path_handled(self, tmp_path: Path) -> None:
-        result = _check_ignore('cat ".env"', tmp_path, ["**/.env"])
+        result = check_ignore('cat ".env"', tmp_path, ["**/.env"])
         assert result is not None
 
     def test_plain_filename_blocked(self, tmp_path: Path) -> None:
-        assert _check_ignore("cat .env", tmp_path, [".env"]) is not None
+        assert check_ignore("cat .env", tmp_path, [".env"]) is not None
 
     def test_plain_dirname_blocks_contents(self, tmp_path: Path) -> None:
-        assert _check_ignore("cat secrets/db.key", tmp_path, ["secrets"]) is not None
-        assert _check_ignore("cat secrets/nested/x.txt", tmp_path, ["secrets"]) is not None
-        assert _check_ignore("cat config/prod.yaml", tmp_path, ["secrets"]) is None
+        assert check_ignore("cat secrets/db.key", tmp_path, ["secrets"]) is not None
+        assert check_ignore("cat secrets/nested/x.txt", tmp_path, ["secrets"]) is not None
+        assert check_ignore("cat config/prod.yaml", tmp_path, ["secrets"]) is None
 
     def test_no_patterns_returns_none(self, tmp_path: Path) -> None:
-        assert _check_ignore("cat .env", tmp_path, []) is None
+        assert check_ignore("cat .env", tmp_path, []) is None
 
     def test_path_traversal_blocked(self, tmp_path: Path) -> None:
         # ../../../etc/passwd resolves outside workdir — must be denied
-        result = _check_ignore("cat ../../../etc/passwd", tmp_path, ["**/.env"])
+        result = check_ignore("cat ../../../etc/passwd", tmp_path, ["**/.env"])
         assert result is not None
         assert "Access denied" in result
 
     def test_absolute_path_outside_workdir_blocked(self, tmp_path: Path) -> None:
         # Absolute path outside workdir must be denied regardless of patterns
-        result = _check_ignore("cat /etc/passwd", tmp_path, ["**/.env"])
+        result = check_ignore("cat /etc/passwd", tmp_path, ["**/.env"])
         assert result is not None
         assert "Access denied" in result
 
