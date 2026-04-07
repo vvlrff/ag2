@@ -8,11 +8,12 @@ from pathlib import Path
 
 import pytest
 
-from autogen.beta import Agent, LocalShellEnvironment, LocalShellTool, MemoryStream
+from autogen.beta import Agent, MemoryStream
 from autogen.beta.events import ToolCallEvent, ToolCallsEvent, ToolResultEvent
 from autogen.beta.events.types import ModelResponse
 from autogen.beta.testing import TestConfig
-from autogen.beta.tools.local.local_shell import _check_ignore, _matches
+from autogen.beta.tools import LocalShellEnvironment, LocalShellTool
+from autogen.beta.tools.shell.environment.local import _check_ignore, _matches
 
 
 class TestMatches:

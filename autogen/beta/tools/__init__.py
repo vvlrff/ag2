@@ -9,7 +9,6 @@ from .builtin import (
     ContainerAutoEnvironment,
     ContainerReferenceEnvironment,
     ImageGenerationTool,
-    LocalEnvironment,
     MCPServerTool,
     MemoryTool,
     NetworkPolicy,
@@ -19,7 +18,7 @@ from .builtin import (
     WebSearchTool,
 )
 from .final import Toolkit, tool
-from .local import LocalShellEnvironment, LocalShellTool
+from .shell import LocalShellEnvironment, LocalShellTool, ShellEnvironment
 from .toolkits import FilesystemToolset
 
 __all__ = (
@@ -28,12 +27,12 @@ __all__ = (
     "ContainerReferenceEnvironment",
     "FilesystemToolset",
     "ImageGenerationTool",
-    "LocalEnvironment",
     "LocalShellEnvironment",
     "LocalShellTool",
     "MCPServerTool",
     "MemoryTool",
     "NetworkPolicy",
+    "ShellEnvironment",
     "ShellTool",
     "ToolResult",
     "Toolkit",
