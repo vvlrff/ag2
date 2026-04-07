@@ -20,11 +20,13 @@ from .builtin import (
 )
 from .final import Toolkit, tool
 from .local import LocalShellEnvironment, LocalShellTool
+from .toolkits import FilesystemToolset
 
 __all__ = (
     "CodeExecutionTool",
     "ContainerAutoEnvironment",
     "ContainerReferenceEnvironment",
+    "FilesystemToolset",
     "ImageGenerationTool",
     "LocalEnvironment",
     "LocalShellEnvironment",
