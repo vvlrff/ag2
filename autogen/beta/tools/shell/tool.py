@@ -4,6 +4,7 @@
 
 from collections.abc import Iterable
 from contextlib import ExitStack
+from os import PathLike
 from pathlib import Path
 
 from autogen.beta.annotations import Context
@@ -21,7 +22,10 @@ class LocalShellTool(Tool):
     All execution details are encapsulated inside the environment.
 
     Args:
-        environment: The execution environment. Defaults to
+        environment: The execution environment, a path to a working directory,
+                     or ``None``. When a path (``str`` or :class:`~pathlib.Path`)
+                     is given, a :class:`LocalShellEnvironment` is created in
+                     that directory automatically. Defaults to
                      :class:`LocalShellEnvironment` with a temporary directory.
 
     Examples::
@@ -29,7 +33,11 @@ class LocalShellTool(Tool):
         # Auto temp dir — cleaned up on exit
         sh = LocalShellTool()
 
-        # Persistent local directory
+        # Pass a path directly — creates LocalShellEnvironment for you
+        sh = LocalShellTool("/tmp/my_project")
+        sh = LocalShellTool(Path("/tmp/my_project"))
+
+        # Full control via explicit environment
         sh = LocalShellTool(LocalShellEnvironment(path="/tmp/my_project"))
 
         # Read-only local inspection
@@ -40,8 +48,11 @@ class LocalShellTool(Tool):
         # sh = LocalShellTool(SSHEnvironment(host="server.com", user="ubuntu"))
     """
 
-    def __init__(self, environment: ShellEnvironment | None = None) -> None:
-        env = environment if environment is not None else LocalShellEnvironment()
+    def __init__(self, environment: ShellEnvironment | PathLike[str] | str | None = None) -> None:
+        if isinstance(environment, (str, PathLike)):
+            env = LocalShellEnvironment(path=environment)
+        else:
+            env = environment if environment is not None else LocalShellEnvironment()
         self._tool: FunctionTool = tool(
             env.run,
             name="shell",
