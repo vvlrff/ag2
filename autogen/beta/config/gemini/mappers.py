@@ -13,6 +13,7 @@ from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
+from autogen.beta.tools.builtin.skills import SkillsToolSchema
 from autogen.beta.tools.builtin.web_fetch import WebFetchToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
@@ -64,6 +65,9 @@ def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
 
         elif isinstance(t, CodeExecutionToolSchema):
             extra_tools.append(types.Tool(code_execution=types.ToolCodeExecution()))
+
+        elif isinstance(t, SkillsToolSchema):
+            raise UnsupportedToolError(t.type, "gemini")
 
         else:
             raise UnsupportedToolError(t.type, "gemini")

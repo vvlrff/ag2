@@ -17,6 +17,7 @@ from autogen.beta.tools.builtin.shell import (
     ContainerReferenceEnvironment,
     ShellToolSchema,
 )
+from autogen.beta.tools.builtin.skills import SkillsToolSchema
 from autogen.beta.tools.builtin.web_search import WebSearchToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
@@ -265,6 +266,10 @@ def tool_to_responses_api(t: ToolSchema) -> dict[str, Any]:
         elif t.authorization_token is not None:
             result["headers"] = {"Authorization": f"Bearer {t.authorization_token}"}
         return result
+
+    elif isinstance(t, SkillsToolSchema):
+        # https://developers.openai.com/api/docs/guides/tools-skills
+        raise UnsupportedToolError(t.type, "openai-responses")
 
     raise UnsupportedToolError(t.type, "openai-responses")
 
