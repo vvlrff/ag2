@@ -29,15 +29,13 @@ class SkillLoader:
     Search priority (first match wins for duplicate names):
 
     1. ``{cwd}/.agents/skills/``  — project-level, cross-client
-    2. ``{cwd}/.claude/skills/``  — project-level, Claude-compatible
-    3. ``~/.agents/skills/``      — user-level, cross-client
-    4. ``~/.claude/skills/``      — user-level, Claude-compatible
-    5. Any *extra_paths* supplied to the constructor (appended in order)
+    2. ``~/.agents/skills/``      — user-level, cross-client
+    3. Any *paths* supplied to the constructor (appended in order)
     """
 
     DEFAULT_PATHS: list[Path] = [
         Path(".agents/skills"),
-        # Path.home() / ".agents/skills",
+        Path.home() / ".agents/skills",
     ]
 
     def __init__(self, *paths: str | Path) -> None:
@@ -83,10 +81,6 @@ class SkillLoader:
             KeyError: if no skill with that name is found.
         """
         return self._find_dir(name)
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
 
     def _find_dir(self, name: str) -> Path:
         for base in self._paths:

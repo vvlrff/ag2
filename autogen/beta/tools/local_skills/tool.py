@@ -47,11 +47,6 @@ class LocalSkillsTool(Toolkit):
         super().__init__(*tools)
 
 
-# ---------------------------------------------------------------------------
-# Factory helpers — keep closures explicit so mypy stays happy
-# ---------------------------------------------------------------------------
-
-
 def _make_list_tool(loader: SkillLoader) -> FunctionTool:
     def list_skills() -> list[dict[str, str]]:
         """List all available skills with their names and descriptions.
