@@ -25,26 +25,20 @@ class LocalSkillsTool(Toolkit):
 
     Example::
 
-        # Scan default paths (~/.agents/skills, .agents/skills, etc.)
+        # Scan default paths (.agents/skills)
         LocalSkillsTool()
 
-        # Add extra paths on top of defaults
-        LocalSkillsTool(".agents/skills", "~/my-skills")
-
-        # Only custom paths, skip defaults
-        LocalSkillsTool("./skills", scan_default=False)
+        # Scan only the given paths (defaults are NOT included)
+        LocalSkillsTool("./skills")
+        LocalSkillsTool("/path/to/skills-a", "/path/to/skills-b")
     """
 
     list_skills: FunctionTool
     load_skill: FunctionTool
     run_skill_script: FunctionTool
 
-    def __init__(
-        self,
-        *extra_paths: str | Path,
-        scan_default: bool = True,
-    ) -> None:
-        loader = SkillLoader(*extra_paths, scan_default=scan_default)
+    def __init__(self, *paths: str | Path) -> None:
+        loader = SkillLoader(*paths)
         self.list_skills = _make_list_tool(loader)
         self.load_skill = _make_load_tool(loader)
         self.run_skill_script = _make_run_tool(loader)

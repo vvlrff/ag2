@@ -37,17 +37,14 @@ class SkillLoader:
 
     DEFAULT_PATHS: list[Path] = [
         Path(".agents/skills"),
-        Path.home() / ".agents/skills",
+        # Path.home() / ".agents/skills",
     ]
 
-    def __init__(
-        self,
-        *extra_paths: str | Path,
-        scan_default: bool = True,
-    ) -> None:
-        paths: list[Path] = list(self.DEFAULT_PATHS) if scan_default else []
-        paths.extend(Path(p) for p in extra_paths)
-        self._paths = paths
+    def __init__(self, *paths: str | Path) -> None:
+        if paths:
+            self._paths = [Path(p) for p in paths]
+        else:
+            self._paths = list(self.DEFAULT_PATHS)
 
     def discover(self) -> list[SkillMetadata]:
         """Scan all configured paths and return metadata for every skill found.

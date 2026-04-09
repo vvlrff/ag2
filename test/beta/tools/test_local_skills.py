@@ -79,7 +79,7 @@ def skill_tree(tmp_path: Path) -> Path:
 
 
 def test_loader_discover(skill_tree: Path) -> None:
-    loader = SkillLoader(skill_tree, scan_default=False)
+    loader = SkillLoader(skill_tree)
 
     skills = loader.discover()
     names = {s.name for s in skills}
@@ -88,7 +88,7 @@ def test_loader_discover(skill_tree: Path) -> None:
 
 
 def test_loader_discover_metadata(skill_tree: Path) -> None:
-    loader = SkillLoader(skill_tree, scan_default=False)
+    loader = SkillLoader(skill_tree)
 
     skills = {s.name: s for s in loader.discover()}
 
@@ -103,7 +103,7 @@ def test_loader_discover_metadata(skill_tree: Path) -> None:
 
 
 def test_loader_load(skill_tree: Path) -> None:
-    loader = SkillLoader(skill_tree, scan_default=False)
+    loader = SkillLoader(skill_tree)
 
     content = loader.load("react-best-practices")
 
@@ -112,14 +112,14 @@ def test_loader_load(skill_tree: Path) -> None:
 
 
 def test_loader_load_missing(skill_tree: Path) -> None:
-    loader = SkillLoader(skill_tree, scan_default=False)
+    loader = SkillLoader(skill_tree)
 
     with pytest.raises(KeyError, match="nonexistent"):
         loader.load("nonexistent")
 
 
 def test_loader_get_path(skill_tree: Path) -> None:
-    loader = SkillLoader(skill_tree, scan_default=False)
+    loader = SkillLoader(skill_tree)
 
     path = loader.get_path("react-best-practices")
 
@@ -127,7 +127,7 @@ def test_loader_get_path(skill_tree: Path) -> None:
 
 
 def test_loader_priority(tmp_path: Path) -> None:
-    """Project-level path must win over user-level path for the same skill name."""
+    """First path wins when the same skill name appears in multiple paths."""
     project_skills = tmp_path / "project"
     user_skills = tmp_path / "user"
 
@@ -140,14 +140,15 @@ def test_loader_priority(tmp_path: Path) -> None:
         )
 
     # project_skills listed first → wins
-    loader = SkillLoader(project_skills, user_skills, scan_default=False)
+    loader = SkillLoader(project_skills, user_skills)
     [meta] = loader.discover()
 
     assert meta.description == "from project"
 
 
-def test_loader_no_default_paths() -> None:
-    loader = SkillLoader(scan_default=False)
+def test_loader_nonexistent_path(tmp_path: Path) -> None:
+    """Non-existent path is silently skipped — returns empty list."""
+    loader = SkillLoader(tmp_path / "no-such-dir")
 
     assert loader.discover() == []
 
@@ -159,7 +160,7 @@ def test_loader_no_default_paths() -> None:
 
 @pytest.mark.asyncio
 async def test_local_skills_tool_schemas(skill_tree: Path) -> None:
-    tool = LocalSkillsTool(skill_tree, scan_default=False)
+    tool = LocalSkillsTool(skill_tree)
 
     schemas = await tool.schemas(_ctx())
 
@@ -171,7 +172,7 @@ async def test_local_skills_tool_schemas(skill_tree: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_run_skill_script_schema(skill_tree: Path) -> None:
-    loader = SkillLoader(skill_tree, scan_default=False)
+    loader = SkillLoader(skill_tree)
     run_tool = _make_run_tool(loader)
 
     [schema] = await run_tool.schemas(_ctx())
@@ -202,6 +203,7 @@ def test_run_skill_script_executes(skill_tree: Path) -> None:
     scripts_dir = skill_tree / "react-best-practices" / "scripts"
     env = LocalShellEnvironment(path=scripts_dir, cleanup=False)
 
-    result = env.run(f"python {scripts_dir / 'scaffold.py'}")
+    # cwd is already scripts_dir, so pass just the filename
+    result = env.run("python scaffold.py")
 
     assert "scaffold" in result
