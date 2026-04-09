@@ -22,7 +22,7 @@ class Skill:
     """
 
     id: str
-    version: str | int | None = None
+    version: str | None = None
 
 
 @dataclass(slots=True)
@@ -30,7 +30,7 @@ class SkillsToolSchema(ToolSchema):
     """Provider-neutral capability flag for provider-side skills.
 
     Skills are passed to the provider via a separate API parameter
-    (``container`` for Anthropic, ``environment`` for OpenAI Responses).
+    (``container`` for Anthropic).
     They never appear in the ``tools[]`` array of a request.
     """
 
@@ -48,9 +48,6 @@ class SkillsTool(Tool):
 
         # Strings — shorthand for Skill(id=s, version=None)
         SkillsTool("pptx", "xlsx")
-
-        # Skill objects — pin a version
-        SkillsTool(Skill("openai-spreadsheets"), Skill("skill_abc123", version="latest"))
 
         # Mix
         SkillsTool("pptx", Skill("xlsx", version="latest"))
