@@ -3,7 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from contextlib import ExitStack
-from unittest.mock import MagicMock
 
 import pytest
 
@@ -11,54 +10,53 @@ from autogen.beta.context import Context
 from autogen.beta.tools.builtin.skills import Skill, SkillsTool, SkillsToolSchema
 
 
-def _ctx() -> Context:
-    return Context(stream=MagicMock())
-
-
 @pytest.mark.asyncio
-async def test_skills_tool_strings() -> None:
+async def test_strings_become_skill_objects(context: Context) -> None:
     t = SkillsTool("pptx", "xlsx")
 
-    [schema] = await t.schemas(_ctx())
+    [schema] = await t.schemas(context)
 
     assert isinstance(schema, SkillsToolSchema)
     assert schema.type == "skills"
-    assert len(schema.skills) == 2
-    assert schema.skills[0] == Skill(id="pptx")
-    assert schema.skills[1] == Skill(id="xlsx")
+    assert schema.skills == [Skill(id="pptx"), Skill(id="xlsx")]
 
 
 @pytest.mark.asyncio
-async def test_skills_tool_skill_objects() -> None:
+async def test_skill_objects_preserved(context: Context) -> None:
     t = SkillsTool(Skill("openai-spreadsheets"), Skill("skill_abc123", version=2))
 
-    [schema] = await t.schemas(_ctx())
+    [schema] = await t.schemas(context)
 
-    assert schema.skills[0] == Skill(id="openai-spreadsheets", version=None)
-    assert schema.skills[1] == Skill(id="skill_abc123", version=2)
+    assert schema.skills == [
+        Skill(id="openai-spreadsheets", version=None),
+        Skill(id="skill_abc123", version=2),
+    ]
 
 
 @pytest.mark.asyncio
-async def test_skills_tool_mixed() -> None:
+async def test_mixed_strings_and_skill_objects(context: Context) -> None:
     t = SkillsTool("pptx", Skill("xlsx", version="20251013"))
 
-    [schema] = await t.schemas(_ctx())
+    [schema] = await t.schemas(context)
 
-    assert schema.skills[0] == Skill(id="pptx", version=None)
-    assert schema.skills[1] == Skill(id="xlsx", version="20251013")
+    assert schema.skills == [
+        Skill(id="pptx", version=None),
+        Skill(id="xlsx", version="20251013"),
+    ]
 
 
 @pytest.mark.asyncio
-async def test_skills_tool_no_args() -> None:
+async def test_no_args_produces_empty_skills(context: Context) -> None:
     t = SkillsTool()
 
-    [schema] = await t.schemas(_ctx())
+    [schema] = await t.schemas(context)
 
     assert schema.skills == []
 
 
 @pytest.mark.asyncio
-async def test_skills_tool_register_is_noop() -> None:
+async def test_register_is_noop(context: Context) -> None:
     t = SkillsTool("pptx")
+
     with ExitStack() as stack:
-        t.register(stack, _ctx())  # must not raise
+        t.register(stack, context)  # must not raise
