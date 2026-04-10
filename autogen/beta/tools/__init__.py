@@ -22,7 +22,7 @@ from .builtin import (
 from .final import Toolkit, tool
 from .local_skills import LocalSkillsTool
 from .shell import LocalShellEnvironment, LocalShellTool, ShellEnvironment
-from .toolkits import FilesystemToolset
+from .toolkits import FilesystemToolset, SkillSearchToolset
 
 __all__ = (
     "CodeExecutionTool",
@@ -39,6 +39,7 @@ __all__ = (
     "ShellEnvironment",
     "ShellTool",
     "Skill",
+    "SkillSearchToolset",
     "SkillsTool",
     "ToolResult",
     "Toolkit",

@@ -3,5 +3,6 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .filesystem import FilesystemToolset
+from .skill_search import SkillSearchToolset
 
-__all__ = ("FilesystemToolset",)
+__all__ = ("FilesystemToolset", "SkillSearchToolset")
