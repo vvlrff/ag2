@@ -41,11 +41,23 @@ class LocalSkillsTool(Toolkit):
     load_skill: FunctionTool
     run_skill_script: FunctionTool
 
-    def __init__(self, *paths: str | Path) -> None:
+    def __init__(
+        self,
+        *paths: str | Path,
+        script_timeout: float = 60,
+        script_max_output: int = 100_000,
+        script_blocked: list[str] | None = None,
+    ) -> None:
         loader = SkillLoader(*paths)
+        self.loader = loader
         self.list_skills = _make_list_tool(loader)
         self.load_skill = _make_load_tool(loader)
-        self.run_skill_script = _make_run_tool(loader)
+        self.run_skill_script = _make_run_tool(
+            loader,
+            timeout=script_timeout,
+            max_output=script_max_output,
+            blocked=script_blocked,
+        )
 
         tools = [self.list_skills, self.load_skill, self.run_skill_script]
         super().__init__(*tools)
@@ -69,7 +81,13 @@ def _make_load_tool(loader: SkillLoader) -> FunctionTool:
     return load_skill
 
 
-def _make_run_tool(loader: SkillLoader) -> FunctionTool:
+def _make_run_tool(
+    loader: SkillLoader,
+    *,
+    timeout: float = 60,
+    max_output: int = 100_000,
+    blocked: list[str] | None = None,
+) -> FunctionTool:
     @tool(description=("Run a script from a skill's scripts directory. Only .py and .sh scripts are supported."))
     def run_skill_script(
         name: Annotated[str, Field(description="Skill name returned by list_skills.")],
@@ -96,7 +114,13 @@ def _make_run_tool(loader: SkillLoader) -> FunctionTool:
         if args:
             command.extend(args)
 
-        env = LocalShellEnvironment(path=scripts_dir, cleanup=False)
+        env = LocalShellEnvironment(
+            path=scripts_dir,
+            cleanup=False,
+            timeout=timeout,
+            max_output=max_output,
+            blocked=blocked,
+        )
         return env.run(shlex.join(command))
 
     return run_skill_script

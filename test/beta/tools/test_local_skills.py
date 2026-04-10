@@ -11,7 +11,7 @@ from dirty_equals import IsPartialDict
 
 from autogen.beta.context import Context
 from autogen.beta.exceptions import InvalidSkillError, InvalidSkillNameError, SkillNotFoundError
-from autogen.beta.tools.local_skills.loader import SkillLoader
+from autogen.beta.tools.local_skills.loader import SkillLoader, parse_frontmatter
 from autogen.beta.tools.local_skills.tool import (
     LocalSkillsTool,
     _make_run_tool,
@@ -66,6 +66,40 @@ def skill_tree(tmp_path: Path) -> Path:
     )
 
     return tmp_path
+
+
+def test_parse_frontmatter_basic() -> None:
+    text = "---\nname: my-skill\ndescription: A great skill\nversion: 2.0\n---\nBody"
+    result = parse_frontmatter(text)
+    assert result["name"] == "my-skill"
+    assert result["description"] == "A great skill"
+    assert result["version"] == 2.0  # yaml.safe_load parses numbers
+
+
+def test_parse_frontmatter_no_header() -> None:
+    assert parse_frontmatter("No frontmatter here") == {}
+
+
+def test_parse_frontmatter_unclosed() -> None:
+    assert parse_frontmatter("---\nname: broken\n") == {}
+
+
+def test_parse_frontmatter_quoted_values() -> None:
+    text = '---\nname: "my-skill"\ndescription: "A skill with: colons"\n---\nBody'
+    result = parse_frontmatter(text)
+    assert result["name"] == "my-skill"
+    assert result["description"] == "A skill with: colons"
+
+
+def test_parse_frontmatter_multiline_description() -> None:
+    text = "---\nname: my-skill\ndescription: >\n  A long\n  description\n---\nBody"
+    result = parse_frontmatter(text)
+    assert "A long" in str(result["description"])
+
+
+# ---------------------------------------------------------------------------
+# SkillLoader — discover
+# ---------------------------------------------------------------------------
 
 
 def test_loader_discover_names(skill_tree: Path) -> None:
@@ -168,6 +202,34 @@ def test_loader_strict_rejects_mismatched_name(tmp_path: Path) -> None:
     loader = SkillLoader(tmp_path, strict=True)
     with pytest.raises(InvalidSkillError, match="must match directory name"):
         loader.discover()
+
+
+def test_loader_cache_avoids_rescan(skill_tree: Path) -> None:
+    loader = SkillLoader(skill_tree)
+
+    first = loader.discover()
+    # Add a new skill after first scan
+    new_dir = skill_tree / "new-skill"
+    new_dir.mkdir()
+    (new_dir / "SKILL.md").write_text("---\nname: new-skill\ndescription: New\n---\n")
+
+    # Should return cached result (no new-skill)
+    second = loader.discover()
+    assert {m.name for m in second} == {m.name for m in first}
+
+
+def test_loader_invalidate_forces_rescan(skill_tree: Path) -> None:
+    loader = SkillLoader(skill_tree)
+
+    loader.discover()
+    # Add a new skill
+    new_dir = skill_tree / "new-skill"
+    new_dir.mkdir()
+    (new_dir / "SKILL.md").write_text("---\nname: new-skill\ndescription: New\n---\n")
+
+    loader.invalidate()
+    refreshed = loader.discover()
+    assert "new-skill" in {m.name for m in refreshed}
 
 
 @pytest.mark.asyncio
