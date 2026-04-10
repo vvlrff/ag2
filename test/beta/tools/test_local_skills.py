@@ -10,12 +10,8 @@ import pytest
 from dirty_equals import IsPartialDict
 
 from autogen.beta.context import Context
-from autogen.beta.tools.local_skills.loader import (
-    InvalidSkillError,
-    InvalidSkillNameError,
-    SkillLoader,
-    SkillNotFoundError,
-)
+from autogen.beta.exceptions import InvalidSkillError, InvalidSkillNameError, SkillNotFoundError
+from autogen.beta.tools.local_skills.loader import SkillLoader
 from autogen.beta.tools.local_skills.tool import (
     LocalSkillsTool,
     _make_run_tool,
