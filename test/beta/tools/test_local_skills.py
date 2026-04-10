@@ -10,8 +10,17 @@ import pytest
 from dirty_equals import IsPartialDict
 
 from autogen.beta.context import Context
-from autogen.beta.tools.local_skills.loader import SkillLoader
-from autogen.beta.tools.local_skills.tool import LocalSkillsTool, _make_run_tool
+from autogen.beta.tools.local_skills.loader import (
+    InvalidSkillError,
+    InvalidSkillNameError,
+    SkillLoader,
+    SkillNotFoundError,
+)
+from autogen.beta.tools.local_skills.tool import (
+    LocalSkillsTool,
+    _make_run_tool,
+)
+from autogen.beta.tools.shell.environment.local import LocalShellEnvironment
 
 
 @pytest.fixture
@@ -119,7 +128,7 @@ def test_loader_load(skill_tree: Path) -> None:
 def test_loader_load_missing(skill_tree: Path) -> None:
     loader = SkillLoader(skill_tree)
 
-    with pytest.raises(KeyError, match="nonexistent"):
+    with pytest.raises(SkillNotFoundError, match="nonexistent"):
         loader.load("nonexistent")
 
 
@@ -129,6 +138,40 @@ def test_loader_get_path(skill_tree: Path) -> None:
     path = loader.get_path("react-best-practices")
 
     assert path == skill_tree / "react-best-practices"
+
+
+def test_loader_rejects_invalid_skill_name(skill_tree: Path) -> None:
+    loader = SkillLoader(skill_tree)
+    with pytest.raises(InvalidSkillNameError):
+        loader.load("../react-best-practices")
+
+
+def test_loader_strict_requires_name_and_description(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "no-frontmatter-required-fields"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("---\nlicense: Apache-2.0\n---\n", encoding="utf-8")
+
+    loader = SkillLoader(tmp_path, strict=True)
+    with pytest.raises(InvalidSkillError, match="missing required frontmatter field"):
+        loader.discover()
+
+
+def test_loader_strict_rejects_mismatched_name(tmp_path: Path) -> None:
+    skill_dir = tmp_path / "skill-dir-name"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text(
+        textwrap.dedent("""\
+            ---
+            name: different-name
+            description: Valid description.
+            ---
+        """),
+        encoding="utf-8",
+    )
+
+    loader = SkillLoader(tmp_path, strict=True)
+    with pytest.raises(InvalidSkillError, match="must match directory name"):
+        loader.discover()
 
 
 @pytest.mark.asyncio
@@ -164,17 +207,7 @@ async def test_run_skill_script_schema(skill_tree: Path, context: Context) -> No
     }
 
 
-def test_run_skill_script_missing_script(skill_tree: Path) -> None:
-    from autogen.beta.tools.local_skills.loader import SkillLoader as L
-
-    loader = L(skill_tree)
-    script_path = loader.get_path("react-best-practices") / "scripts" / "nonexistent.py"
-
-    assert not script_path.exists()
-
-
 def test_run_skill_script_executes(skill_tree: Path) -> None:
-    from autogen.beta.tools.shell.environment.local import LocalShellEnvironment
 
     scripts_dir = skill_tree / "react-best-practices" / "scripts"
     env = LocalShellEnvironment(path=scripts_dir, cleanup=False)

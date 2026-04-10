@@ -2,7 +2,11 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import shlex
 from pathlib import Path
+from typing import Annotated
+
+from pydantic import Field
 
 from autogen.beta.tools.final import Toolkit, tool
 from autogen.beta.tools.final.function_tool import FunctionTool
@@ -48,51 +52,51 @@ class LocalSkillsTool(Toolkit):
 
 
 def _make_list_tool(loader: SkillLoader) -> FunctionTool:
+    @tool(description="List available local skills with name and short description.")
     def list_skills() -> list[dict[str, str]]:
-        """List all available skills with their names and descriptions.
-
-        Call load_skill(name) to get the full instructions for a specific skill.
-        """
         return [{"name": m.name, "description": m.description} for m in loader.discover()]
 
-    return tool(list_skills)
+    return list_skills
 
 
 def _make_load_tool(loader: SkillLoader) -> FunctionTool:
-    def load_skill(name: str) -> str:
-        """Load the full SKILL.md instructions for a skill by name."""
+    @tool(description="Load the full SKILL.md content for a specific skill.")
+    def load_skill(
+        name: Annotated[str, Field(description="Skill name returned by list_skills.")],
+    ) -> str:
         return loader.load(name)
 
-    return tool(load_skill)
+    return load_skill
 
 
 def _make_run_tool(loader: SkillLoader) -> FunctionTool:
-    def run_skill_script(name: str, script: str, args: list[str] | None = None) -> str:
-        """Execute a script from a skill's scripts/ directory.
-
-        Args:
-            name:   Skill name (as returned by list_skills).
-            script: Script filename inside the skill's ``scripts/`` directory
-                    (e.g. ``"scaffold.py"`` or ``"build.sh"``).
-            args:   Optional list of arguments passed to the script.
-
-        Returns:
-            Combined stdout + stderr output of the script.
-        """
+    @tool(description=("Run a script from a skill's scripts directory. Only .py and .sh scripts are supported."))
+    def run_skill_script(
+        name: Annotated[str, Field(description="Skill name returned by list_skills.")],
+        script: Annotated[
+            str,
+            Field(description="Script filename inside scripts/, for example scaffold.py or build.sh."),
+        ],
+        args: list[str] | None = Field(
+            default=None,
+            description="Optional script arguments passed as positional parameters.",
+        ),
+    ) -> str:
         skill_dir = loader.get_path(name)
         scripts_dir = skill_dir / "scripts"
-        script_path = scripts_dir / script
+        script_path = Path(script)
+        if script_path.name != script:
+            raise ValueError("script must be a filename inside the skill scripts directory")
 
-        if not script_path.exists():
-            return f"Error: script '{script}' not found in {scripts_dir}"
+        resolved_script = (scripts_dir / script_path.name).resolve()
+        if not resolved_script.is_file() or not resolved_script.is_relative_to(scripts_dir.resolve()):
+            raise FileNotFoundError(f"script {script!r} not found in {scripts_dir}")
 
-        prefix = "python " if script.endswith(".py") else ""
-        # Use just the script filename — cwd is already scripts_dir
-        cmd = prefix + script
+        command = [resolved_script.name]
         if args:
-            cmd += " " + " ".join(args)
+            command.extend(args)
 
         env = LocalShellEnvironment(path=scripts_dir, cleanup=False)
-        return env.run(cmd)
+        return env.run(shlex.join(command))
 
-    return tool(run_skill_script)
+    return run_skill_script
