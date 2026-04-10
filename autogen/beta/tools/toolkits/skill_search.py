@@ -2,6 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import asyncio
+import atexit
+import hashlib
+import json
 import os
 import shutil
 import tarfile
@@ -14,6 +18,7 @@ import httpx
 from autogen.beta.middleware import ToolMiddleware
 from autogen.beta.tools.final import Toolkit, tool
 from autogen.beta.tools.final.function_tool import FunctionTool
+from autogen.beta.tools.local_skills.loader import SkillLoader, SkillMetadata, parse_frontmatter
 from autogen.beta.tools.local_skills.tool import LocalSkillsTool
 
 _EXCLUDE_NAMES = frozenset({".git", ".env", "__pycache__", ".DS_Store", "node_modules"})
@@ -71,10 +76,14 @@ class SkillSearchToolset(Toolkit):
         install_dir: str | Path | None = None,
         cleanup: bool = False,
         github_token: str | None = None,
+        script_timeout: float = 60,
+        script_max_output: int = 100_000,
+        script_blocked: list[str] | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         _install_dir = Path(install_dir) if install_dir is not None else Path(".agents/skills")
         client = _SkillsClient(github_token or os.environ.get("GITHUB_TOKEN"))
+        lock = _SkillsLock(_install_dir / "skills-lock.json")
 
         @tool
         async def search_skills(query: str, limit: int = 10) -> str:
@@ -125,8 +134,10 @@ class SkillSearchToolset(Toolkit):
 
             try:
                 _install_dir.mkdir(parents=True, exist_ok=True)
-                name = await client.download_skill(source, sid, _install_dir)
-                return f"Installed: {name} \u2192 {_install_dir / name}/"
+                meta, computed_hash = await client.download_skill(source, sid, _install_dir)
+                lock.record(meta.name, source, computed_hash)
+                local.loader.invalidate()
+                return _format_install_result(meta, _install_dir)
             except RuntimeError as e:
                 return str(e)
             except Exception as e:
@@ -143,9 +154,17 @@ class SkillSearchToolset(Toolkit):
             if not skill_path.is_relative_to(_install_dir.resolve()) or not skill_path.exists():
                 return f"Cannot remove '{name}': not in install_dir {_install_dir}"
             shutil.rmtree(skill_path)
+            lock.remove(name)
+            local.loader.invalidate()
             return f"Removed: {name}"
 
-        local = LocalSkillsTool(_install_dir, *extra_paths)
+        local = LocalSkillsTool(
+            _install_dir,
+            *extra_paths,
+            script_timeout=script_timeout,
+            script_max_output=script_max_output,
+            script_blocked=script_blocked,
+        )
 
         self.search_skills = search_skills
         self.install_skill = install_skill
@@ -155,9 +174,16 @@ class SkillSearchToolset(Toolkit):
         self.run_skill_script = local.run_skill_script
 
         if cleanup:
-            import atexit
-
             atexit.register(shutil.rmtree, str(_install_dir), True)
+
+        def _close_client() -> None:
+            try:
+                loop = asyncio.get_running_loop()
+                loop.create_task(client.close())
+            except RuntimeError:
+                asyncio.run(client.close())
+
+        atexit.register(_close_client)
 
         super().__init__(
             self.search_skills,
@@ -176,20 +202,48 @@ class SkillSearchToolset(Toolkit):
 
 
 class _SkillsClient:
+    """HTTP client for skills.sh search and GitHub tarball downloads.
+
+    Lazily creates a shared :class:`httpx.AsyncClient` for connection reuse
+    across multiple search and download calls within a session.
+    """
+
     SKILLS_SH_API = "https://skills.sh/api"
     GITHUB_API = "https://api.github.com"
 
     def __init__(self, github_token: str | None = None) -> None:
         self._github_token = github_token
+        self._client: httpx.AsyncClient | None = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._client is None or self._client.is_closed:
+            headers: dict[str, str] = {
+                "Accept": "application/vnd.github+json",
+                "User-Agent": "ag2-skill-search/1.0",
+            }
+            if self._github_token:
+                headers["Authorization"] = f"Bearer {self._github_token}"
+            self._client = httpx.AsyncClient(
+                follow_redirects=True,
+                timeout=30,
+                headers=headers,
+            )
+        return self._client
+
+    async def close(self) -> None:
+        """Close the underlying HTTP client (best-effort)."""
+        if self._client is not None and not self._client.is_closed:
+            await self._client.aclose()
+            self._client = None
 
     async def search(self, query: str, limit: int = 10) -> list[dict]:
         url = f"{self.SKILLS_SH_API}/search"
-        async with httpx.AsyncClient(timeout=30) as client:
-            response = await client.get(url, params={"q": query, "limit": limit})
-            response.raise_for_status()
-            return response.json().get("skills", [])
+        client = self._get_client()
+        response = await client.get(url, params={"q": query, "limit": limit})
+        response.raise_for_status()
+        return response.json().get("skills", [])
 
-    async def download_skill(self, source: str, skill_id: str, dest: Path) -> str:
+    async def download_skill(self, source: str, skill_id: str, dest: Path) -> tuple[SkillMetadata, str]:
         """Download a skill via GitHub Tarball API and extract it to *dest*.
 
         Args:
@@ -199,46 +253,46 @@ class _SkillsClient:
             dest:     parent directory where the extracted skill folder is placed.
 
         Returns:
-            The skill name read from ``SKILL.md`` frontmatter.
+            A ``(metadata, sha256_hex)`` tuple: validated :class:`SkillMetadata`
+            and the SHA-256 hex digest of the downloaded tarball.
         """
-        headers: dict[str, str] = {
-            "Accept": "application/vnd.github+json",
-            "User-Agent": "ag2-skill-search/1.0",
-        }
-        if self._github_token:
-            headers["Authorization"] = f"Bearer {self._github_token}"
+        client = self._get_client()
 
         with tempfile.TemporaryDirectory() as tmp_dir:
             tar_path = Path(tmp_dir) / "skill.tar.gz"
+            hash_obj = hashlib.sha256()
 
-            async with httpx.AsyncClient(follow_redirects=True, timeout=120) as client:
-                async with client.stream("GET", f"{self.GITHUB_API}/repos/{source}/tarball", headers=headers) as resp:
-                    if resp.status_code == 403:
-                        raise RuntimeError(
-                            "GitHub rate limit exceeded. Set GITHUB_TOKEN or pass github_token= to SkillSearchToolset."
-                        )
-                    if resp.status_code == 404:
-                        raise RuntimeError(
-                            f"Skill not found: {source}. Check that the repository exists and is public."
-                        )
-                    resp.raise_for_status()
-                    with tar_path.open("wb") as fh:
-                        async for chunk in resp.aiter_bytes():
-                            fh.write(chunk)
+            async with client.stream(
+                "GET",
+                f"{self.GITHUB_API}/repos/{source}/tarball",
+                timeout=120,
+            ) as resp:
+                if resp.status_code == 403:
+                    raise RuntimeError(
+                        "GitHub rate limit exceeded. Set GITHUB_TOKEN or pass github_token= to SkillSearchToolset."
+                    )
+                if resp.status_code == 404:
+                    raise RuntimeError(f"Skill not found: {source}. Check that the repository exists and is public.")
+                resp.raise_for_status()
+                with tar_path.open("wb") as fh:
+                    async for chunk in resp.aiter_bytes():
+                        hash_obj.update(chunk)
+                        fh.write(chunk)
 
-            return _extract_skill(tar_path, skill_id, dest)
+            meta = _extract_skill(tar_path, skill_id, dest)
+            return meta, hash_obj.hexdigest()
 
 
-def _extract_skill(tar_path: Path, skill_id: str, dest: Path) -> str:
+def _extract_skill(tar_path: Path, skill_id: str, dest: Path) -> SkillMetadata:
     """Extract a skill from *tar_path* into ``dest/<skill_name>/``.
 
     Supports both monorepo layout (``skills/{skill_id}/``) and standalone repos.
-    Returns the skill name from ``SKILL.md`` frontmatter.
+    Returns validated :class:`SkillMetadata` for the extracted skill.
     """
     with tempfile.TemporaryDirectory() as extract_tmp:
         skill_content_dir = Path(extract_tmp) / "skill"
         skill_content_dir.mkdir()
-        skill_name: str | None = None
+        skill_fm: dict[str, object] | None = None
 
         with tarfile.open(tar_path, "r:gz") as tar:
             members = tar.getmembers()
@@ -272,29 +326,75 @@ def _extract_skill(tar_path: Path, skill_id: str, dest: Path) -> str:
                     file_obj = tar.extractfile(member)
                     if file_obj is not None:
                         target_path.write_bytes(file_obj.read())
-                    if rel_path == "SKILL.md" and skill_name is None:
-                        skill_name = _parse_frontmatter(target_path.read_text(encoding="utf-8")).get("name")
+                    if rel_path == "SKILL.md" and skill_fm is None:
+                        skill_fm = parse_frontmatter(target_path.read_text(encoding="utf-8"))
 
-        if skill_name is None:
+        if skill_fm is None or "name" not in skill_fm:
             raise RuntimeError(f"No SKILL.md found in archive (skill_id={skill_id!r})")
+
+        skill_name = str(skill_fm["name"])
+        fm_str = {k: str(v) for k, v in skill_fm.items()}
 
         final_dest = dest / skill_name
         if final_dest.exists():
             shutil.rmtree(final_dest)
         shutil.copytree(skill_content_dir, final_dest)
-        return skill_name
+
+        meta = SkillMetadata(
+            name=skill_name,
+            description=fm_str.get("description") or "",
+            path=final_dest,
+            has_scripts=(final_dest / "scripts").is_dir(),
+            version=fm_str.get("version") or None,
+            license=fm_str.get("license") or None,
+            compatibility=fm_str.get("compatibility") or None,
+        )
+        SkillLoader.validate_skill_metadata(final_dest, skill_fm, meta)
+        return meta
 
 
-def _parse_frontmatter(text: str) -> dict[str, str]:
-    """Parse simple YAML frontmatter (``--- ... ---``) from SKILL.md."""
-    if not text.startswith("---"):
-        return {}
-    end = text.find("\n---", 3)
-    if end == -1:
-        return {}
-    result: dict[str, str] = {}
-    for line in text[3:end].strip().splitlines():
-        if ":" in line:
-            key, _, value = line.partition(":")
-            result[key.strip()] = value.strip()
-    return result
+def _format_install_result(meta: SkillMetadata, install_dir: Path) -> str:
+    """Build a human-readable install summary from skill metadata."""
+    lines = [f"Installed: {meta.name} \u2192 {install_dir / meta.name}/"]
+    lines.append(f"Description: {meta.description}")
+    if meta.version:
+        lines.append(f"Version: {meta.version}")
+    if meta.has_scripts:
+        script_names = sorted(p.name for p in (meta.path / "scripts").iterdir() if p.is_file())
+        if script_names:
+            lines.append(f"Scripts: {', '.join(script_names)}")
+    lines.append(f'Use load_skill("{meta.name}") to read full instructions.')
+    return "\n".join(lines)
+
+
+class _SkillsLock:
+    """Manages ``skills-lock.json`` for tracking installed skill hashes."""
+
+    def __init__(self, path: Path) -> None:
+        self._path = path
+
+    def read(self) -> dict:
+        if self._path.exists():
+            return json.loads(self._path.read_text(encoding="utf-8"))
+        return {"version": 1, "skills": {}}
+
+    def record(self, name: str, source: str, computed_hash: str) -> None:
+        """Record or update a skill entry in the lock file."""
+        data = self.read()
+        data["skills"][name] = {
+            "source": source,
+            "sourceType": "github",
+            "computedHash": computed_hash,
+        }
+        self._path.parent.mkdir(parents=True, exist_ok=True)
+        self._path.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+
+    def remove(self, name: str) -> None:
+        """Remove a skill entry from the lock file."""
+        data = self.read()
+        data["skills"].pop(name, None)
+        self._path.write_text(json.dumps(data, indent=2, sort_keys=True), encoding="utf-8")
+
+    def get_hash(self, name: str) -> str | None:
+        """Return the recorded hash for a skill, or ``None``."""
+        return self.read().get("skills", {}).get(name, {}).get("computedHash")

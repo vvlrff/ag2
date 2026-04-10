@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import io
+import json
 import tarfile
 import textwrap
 from pathlib import Path
@@ -11,11 +12,12 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from autogen.beta.context import Context
+from autogen.beta.tools.local_skills.loader import SkillMetadata
 from autogen.beta.tools.toolkits.skill_search import (
     SkillSearchToolset,
     _SkillsClient,
+    _SkillsLock,
     _extract_skill,
-    _parse_frontmatter,
 )
 
 # ---------------------------------------------------------------------------
@@ -43,7 +45,7 @@ STANDALONE_SKILL_MD = textwrap.dedent("""\
 
 
 def _make_tarball(entries: dict[str, bytes | str]) -> bytes:
-    """Build an in-memory .tar.gz archive from a name→content mapping."""
+    """Build an in-memory .tar.gz archive from a name->content mapping."""
     buf = io.BytesIO()
     with tarfile.open(fileobj=buf, mode="w:gz") as tar:
         for name, content in entries.items():
@@ -68,22 +70,17 @@ def _standalone_tarball() -> bytes:
     })
 
 
-# ---------------------------------------------------------------------------
-# _parse_frontmatter
-# ---------------------------------------------------------------------------
-
-
-def test_parse_frontmatter_basic() -> None:
-    text = "---\nname: my-skill\ndescription: A great skill\nversion: 2.0\n---\nBody"
-    assert _parse_frontmatter(text) == {"name": "my-skill", "description": "A great skill", "version": "2.0"}
-
-
-def test_parse_frontmatter_no_header() -> None:
-    assert _parse_frontmatter("No frontmatter here") == {}
-
-
-def test_parse_frontmatter_unclosed() -> None:
-    assert _parse_frontmatter("---\nname: broken\n") == {}
+def _make_meta(tmp_path: Path, name: str = "vercel-react-best-practices") -> SkillMetadata:
+    """Build a SkillMetadata for mocked install tests."""
+    skill_dir = tmp_path / "skills" / name
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    return SkillMetadata(
+        name=name,
+        description="React and Next.js performance optimization guidelines",
+        path=skill_dir,
+        has_scripts=False,
+        version="1.0.0",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -97,9 +94,11 @@ def test_extract_skill_monorepo(tmp_path: Path) -> None:
     tar_path = tmp_path / "skill.tar.gz"
     tar_path.write_bytes(_monorepo_tarball())
 
-    name = _extract_skill(tar_path, "react-best-practices", dest)
+    meta = _extract_skill(tar_path, "react-best-practices", dest)
 
-    assert name == "vercel-react-best-practices"
+    assert meta.name == "vercel-react-best-practices"
+    assert meta.description == "React and Next.js performance optimization guidelines"
+    assert meta.version == "1.0.0"
     skill_dir = dest / "vercel-react-best-practices"
     assert (skill_dir / "SKILL.md").exists()
     assert (skill_dir / "rules" / "rule1.md").exists()
@@ -111,9 +110,10 @@ def test_extract_skill_standalone(tmp_path: Path) -> None:
     tar_path = tmp_path / "skill.tar.gz"
     tar_path.write_bytes(_standalone_tarball())
 
-    name = _extract_skill(tar_path, "", dest)
+    meta = _extract_skill(tar_path, "", dest)
 
-    assert name == "last30days"
+    assert meta.name == "last30days"
+    assert meta.has_scripts is True
     assert (dest / "last30days" / "SKILL.md").exists()
     assert (dest / "last30days" / "scripts" / "last30days.py").exists()
 
@@ -156,6 +156,20 @@ def test_extract_skill_overwrites_existing(tmp_path: Path) -> None:
 
     assert not (dest / "last30days" / "stale.txt").exists()
     assert (dest / "last30days" / "SKILL.md").exists()
+
+
+def test_extract_skill_validates_metadata(tmp_path: Path) -> None:
+    """Extracted skill with invalid name format should raise."""
+    dest = tmp_path / "skills"
+    dest.mkdir()
+    bad_skill_md = "---\nname: INVALID_NAME\ndescription: Bad\n---\n"
+    tar_path = tmp_path / "skill.tar.gz"
+    tar_path.write_bytes(_make_tarball({"owner-repo-abc123/SKILL.md": bad_skill_md}))
+
+    from autogen.beta.exceptions import InvalidSkillError
+
+    with pytest.raises(InvalidSkillError):
+        _extract_skill(tar_path, "", dest)
 
 
 # ---------------------------------------------------------------------------
@@ -210,20 +224,40 @@ async def test_search_skills_network_error(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_install_skill_monorepo(tmp_path: Path) -> None:
-    with patch.object(_SkillsClient, "download_skill", AsyncMock(return_value="vercel-react-best-practices")):
+    meta = _make_meta(tmp_path)
+    with patch.object(_SkillsClient, "download_skill", AsyncMock(return_value=(meta, "abc123hash"))):
         toolset = SkillSearchToolset(install_dir=tmp_path / "skills")
         result = await toolset.install_skill.model.call(skill_id="vercel-labs/agent-skills/react-best-practices")
 
     assert "Installed: vercel-react-best-practices" in result
+    assert "Description:" in result
+    assert 'load_skill("vercel-react-best-practices")' in result
 
 
 @pytest.mark.asyncio
 async def test_install_skill_standalone(tmp_path: Path) -> None:
-    with patch.object(_SkillsClient, "download_skill", AsyncMock(return_value="last30days")):
+    meta = _make_meta(tmp_path, name="last30days")
+    with patch.object(_SkillsClient, "download_skill", AsyncMock(return_value=(meta, "def456hash"))):
         toolset = SkillSearchToolset(install_dir=tmp_path / "skills")
         result = await toolset.install_skill.model.call(skill_id="mvanhorn/last30days-skill")
 
     assert "Installed: last30days" in result
+
+
+@pytest.mark.asyncio
+async def test_install_skill_records_hash(tmp_path: Path) -> None:
+    """install_skill should write hash to skills-lock.json."""
+    install_dir = tmp_path / "skills"
+    meta = _make_meta(tmp_path)
+    with patch.object(_SkillsClient, "download_skill", AsyncMock(return_value=(meta, "abc123hash"))):
+        toolset = SkillSearchToolset(install_dir=install_dir)
+        await toolset.install_skill.model.call(skill_id="vercel-labs/agent-skills/react-best-practices")
+
+    lock_path = install_dir / "skills-lock.json"
+    assert lock_path.exists()
+    lock_data = json.loads(lock_path.read_text())
+    assert lock_data["skills"]["vercel-react-best-practices"]["computedHash"] == "abc123hash"
+    assert lock_data["skills"]["vercel-react-best-practices"]["source"] == "vercel-labs/agent-skills"
 
 
 @pytest.mark.asyncio
@@ -274,6 +308,26 @@ async def test_remove_skill_success(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_remove_skill_cleans_lock_file(tmp_path: Path) -> None:
+    """remove_skill should remove entry from skills-lock.json."""
+    install_dir = tmp_path / "skills"
+    skill_dir = install_dir / "my-skill"
+    skill_dir.mkdir(parents=True)
+    (skill_dir / "SKILL.md").write_text("---\nname: my-skill\n---\n")
+
+    # Pre-populate lock file
+    lock_path = install_dir / "skills-lock.json"
+    lock_data = {"version": 1, "skills": {"my-skill": {"source": "x/y", "sourceType": "github", "computedHash": "aaa"}}}
+    lock_path.write_text(json.dumps(lock_data))
+
+    toolset = SkillSearchToolset(install_dir=install_dir)
+    await toolset.remove_skill.model.call(name="my-skill")
+
+    updated = json.loads(lock_path.read_text())
+    assert "my-skill" not in updated["skills"]
+
+
+@pytest.mark.asyncio
 async def test_remove_skill_not_found(tmp_path: Path) -> None:
     install_dir = tmp_path / "skills"
     install_dir.mkdir()
@@ -296,6 +350,49 @@ async def test_remove_skill_path_traversal_blocked(tmp_path: Path) -> None:
 
     assert "Cannot remove" in result
     assert outside.exists()
+
+
+# ---------------------------------------------------------------------------
+# _SkillsLock
+# ---------------------------------------------------------------------------
+
+
+def test_lock_record_and_read(tmp_path: Path) -> None:
+    lock = _SkillsLock(tmp_path / "skills-lock.json")
+
+    lock.record("my-skill", "owner/repo", "abc123")
+
+    data = lock.read()
+    assert data["version"] == 1
+    assert data["skills"]["my-skill"]["computedHash"] == "abc123"
+    assert data["skills"]["my-skill"]["source"] == "owner/repo"
+
+
+def test_lock_remove(tmp_path: Path) -> None:
+    lock = _SkillsLock(tmp_path / "skills-lock.json")
+    lock.record("skill-a", "a/b", "hash1")
+    lock.record("skill-b", "c/d", "hash2")
+
+    lock.remove("skill-a")
+
+    data = lock.read()
+    assert "skill-a" not in data["skills"]
+    assert "skill-b" in data["skills"]
+
+
+def test_lock_get_hash(tmp_path: Path) -> None:
+    lock = _SkillsLock(tmp_path / "skills-lock.json")
+    lock.record("my-skill", "owner/repo", "abc123")
+
+    assert lock.get_hash("my-skill") == "abc123"
+    assert lock.get_hash("nonexistent") is None
+
+
+def test_lock_read_nonexistent(tmp_path: Path) -> None:
+    lock = _SkillsLock(tmp_path / "no-such-file.json")
+
+    data = lock.read()
+    assert data == {"version": 1, "skills": {}}
 
 
 # ---------------------------------------------------------------------------

@@ -11,6 +11,21 @@ import yaml
 from autogen.beta.exceptions import InvalidSkillError, InvalidSkillNameError, SkillNotFoundError
 
 
+def parse_frontmatter(text: str) -> dict[str, object]:
+    """Parse YAML frontmatter (``--- ... ---``) from a SKILL.md file.
+
+    Returns a dict of parsed key-value pairs using :func:`yaml.safe_load`.
+    Returns an empty dict when there is no valid frontmatter block.
+    """
+    if not text.startswith("---"):
+        return {}
+    end = text.find("\n---", 3)
+    if end == -1:
+        return {}
+    parsed = yaml.safe_load(text[3:end].strip())
+    return {str(k): v for k, v in parsed.items()} if isinstance(parsed, dict) else {}
+
+
 @dataclass
 class SkillMetadata:
     """Metadata parsed from a skill's SKILL.md frontmatter."""
@@ -54,13 +69,27 @@ class SkillLoader:
         else:
             self._paths = list(self.DEFAULT_PATHS)
         self._strict = strict
+        self._cache: dict[str, SkillMetadata] | None = None
+
+    def invalidate(self) -> None:
+        """Clear the cached skill metadata.
+
+        The next call to :meth:`discover` will rescan the filesystem.
+        """
+        self._cache = None
 
     def discover(self) -> list[SkillMetadata]:
         """Scan all configured paths and return metadata for every skill found.
 
+        Results are cached after the first scan.  Call :meth:`invalidate` to
+        force a rescan (e.g. after installing or removing a skill).
+
         When the same skill name appears in more than one path, the first
         occurrence (higher-priority path) wins.
         """
+        if self._cache is not None:
+            return sorted(self._cache.values(), key=lambda m: m.name)
+
         seen: dict[str, SkillMetadata] = {}
         for base in self._paths:
             if not base.exists():
@@ -72,16 +101,7 @@ class SkillLoader:
                 if not skill_md.exists():
                     continue
                 text = skill_md.read_text(encoding="utf-8")
-                fm_raw: dict[str, object] = {}
-                # Parse SKILL.md frontmatter as defined by:
-                # https://agentskills.io/specification
-                if text.startswith("---"):
-                    end = text.find("\n---", 3)
-                    if end != -1:
-                        yaml_block = text[3:end].strip()
-                        parsed = yaml.safe_load(yaml_block)
-                        if isinstance(parsed, dict):
-                            fm_raw = {str(k): v for k, v in parsed.items() if v is not None}
+                fm_raw = {k: v for k, v in parse_frontmatter(text).items() if v is not None}
                 fm = {k: str(v) for k, v in fm_raw.items()}
                 meta = SkillMetadata(
                     name=fm.get("name") or skill_dir.name,
@@ -93,9 +113,10 @@ class SkillLoader:
                     compatibility=fm.get("compatibility") or None,
                 )
                 if self._strict:
-                    self._validate_skill_metadata(skill_dir, fm_raw, meta)
+                    self.validate_skill_metadata(skill_dir, fm_raw, meta)
                 if meta.name not in seen:
                     seen[meta.name] = meta
+        self._cache = seen
         return sorted(seen.values(), key=lambda m: m.name)
 
     def load(self, name: str) -> str:
@@ -126,7 +147,7 @@ class SkillLoader:
         raise SkillNotFoundError(f"Skill {name!r} not found in any configured path")
 
     @classmethod
-    def _validate_skill_metadata(cls, skill_dir: Path, fm: dict[str, object], meta: SkillMetadata) -> None:
+    def validate_skill_metadata(cls, skill_dir: Path, fm: dict[str, object], meta: SkillMetadata) -> None:
         if "name" not in fm:
             raise InvalidSkillError(f"Skill {skill_dir.name!r} is missing required frontmatter field: name")
         if "description" not in fm:
