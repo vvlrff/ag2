@@ -8,17 +8,7 @@ from pathlib import Path
 
 import yaml
 
-
-class SkillNotFoundError(KeyError):
-    """Raised when a skill cannot be found in configured paths."""
-
-
-class InvalidSkillNameError(ValueError):
-    """Raised when a skill name is empty or malformed."""
-
-
-class InvalidSkillError(ValueError):
-    """Raised when skill metadata violates the specification."""
+from autogen.beta.exceptions import InvalidSkillError, InvalidSkillNameError, SkillNotFoundError
 
 
 @dataclass
