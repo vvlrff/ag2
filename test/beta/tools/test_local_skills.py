@@ -68,11 +68,6 @@ def skill_tree(tmp_path: Path) -> Path:
     return tmp_path
 
 
-# ---------------------------------------------------------------------------
-# parse_frontmatter
-# ---------------------------------------------------------------------------
-
-
 def test_parse_frontmatter_basic() -> None:
     text = "---\nname: my-skill\ndescription: A great skill\nversion: 2.0\n---\nBody"
     result = parse_frontmatter(text)
@@ -209,11 +204,6 @@ def test_loader_strict_rejects_mismatched_name(tmp_path: Path) -> None:
         loader.discover()
 
 
-# ---------------------------------------------------------------------------
-# SkillLoader — cache
-# ---------------------------------------------------------------------------
-
-
 def test_loader_cache_avoids_rescan(skill_tree: Path) -> None:
     loader = SkillLoader(skill_tree)
 
@@ -240,11 +230,6 @@ def test_loader_invalidate_forces_rescan(skill_tree: Path) -> None:
     loader.invalidate()
     refreshed = loader.discover()
     assert "new-skill" in {m.name for m in refreshed}
-
-
-# ---------------------------------------------------------------------------
-# LocalSkillsTool — schemas
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
