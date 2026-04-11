@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import shlex
+import stat
 from pathlib import Path
 from typing import Annotated
 
@@ -95,10 +96,10 @@ def _make_run_tool(
             str,
             Field(description="Script filename inside scripts/, for example scaffold.py or build.sh."),
         ],
-        args: list[str] | None = Field(
-            default=None,
-            description="Optional script arguments passed as positional parameters.",
-        ),
+        args: Annotated[
+            list[str] | None,
+            Field(description="Optional script arguments passed as positional parameters."),
+        ] = None,
     ) -> str:
         skill_dir = loader.get_path(name)
         scripts_dir = skill_dir / "scripts"
@@ -110,7 +111,20 @@ def _make_run_tool(
         if not resolved_script.is_file() or not resolved_script.is_relative_to(scripts_dir.resolve()):
             raise FileNotFoundError(f"script {script!r} not found in {scripts_dir}")
 
-        command = [resolved_script.name]
+        first_line = resolved_script.read_text(encoding="utf-8", errors="replace").split("\n", 1)[0]
+        has_shebang = first_line.startswith("#!")
+
+        if has_shebang:
+            resolved_script.chmod(resolved_script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+            command = [f"./{resolved_script.name}"]
+        elif resolved_script.suffix.lower() == ".py":
+            command = ["python3", f"./{resolved_script.name}"]
+        elif resolved_script.suffix.lower() == ".sh":
+            command = ["sh", f"./{resolved_script.name}"]
+        else:
+            resolved_script.chmod(resolved_script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+            command = [f"./{resolved_script.name}"]
+
         if args:
             command.extend(args)
 
