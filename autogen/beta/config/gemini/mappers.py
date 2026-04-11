@@ -39,6 +39,19 @@ def build_system_instruction(
     return joined or None
 
 
+def _ensure_object_schema(params: dict[str, Any]) -> dict[str, Any]:
+    """Gemini requires every function's parameters schema to be type=object.
+
+    Parameterless functions produce ``{"type": "null"}`` (from pydantic/fast_depends)
+    or ``{}`` — both rejected by Gemini with ``INVALID_ARGUMENT``.
+    Normalise to ``{"type": "object", "properties": {}}``.
+    """
+    raw_type = str(params.get("type", "")).lower()
+    if not params or raw_type in ("null", "none", ""):
+        return {"type": "object", "properties": {}}
+    return params
+
+
 def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
     """Build Gemini tool objects from a list of ToolSchemas."""
     function_declarations: list[types.FunctionDeclaration] = []
@@ -50,7 +63,7 @@ def build_tools(schemas: list[ToolSchema]) -> list[types.Tool] | None:
                 types.FunctionDeclaration(
                     name=t.function.name,
                     description=t.function.description,
-                    parameters=t.function.parameters,
+                    parameters=_ensure_object_schema(t.function.parameters),
                 )
             )
 

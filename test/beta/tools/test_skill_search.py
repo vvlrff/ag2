@@ -12,17 +12,12 @@ from unittest.mock import AsyncMock, patch
 import pytest
 
 from autogen.beta.context import Context
+from autogen.beta.exceptions import InvalidSkillError, SkillInstallError
 from autogen.beta.tools.local_skills.loader import SkillMetadata
-from autogen.beta.tools.toolkits.skill_search import (
-    SkillSearchToolset,
-    _SkillsClient,
-    _SkillsLock,
-    _extract_skill,
-)
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
+from autogen.beta.tools.toolkits.skill_search import SkillSearchToolset
+from autogen.beta.tools.toolkits.skill_search.client import SkillsClient
+from autogen.beta.tools.toolkits.skill_search.extractor import extract_skill
+from autogen.beta.tools.toolkits.skill_search.lock import SkillsLock
 
 MONOREPO_SKILL_MD = textwrap.dedent("""\
     ---
@@ -84,7 +79,7 @@ def _make_meta(tmp_path: Path, name: str = "vercel-react-best-practices") -> Ski
 
 
 # ---------------------------------------------------------------------------
-# _extract_skill
+# extract_skill
 # ---------------------------------------------------------------------------
 
 
@@ -94,7 +89,7 @@ def test_extract_skill_monorepo(tmp_path: Path) -> None:
     tar_path = tmp_path / "skill.tar.gz"
     tar_path.write_bytes(_monorepo_tarball())
 
-    meta = _extract_skill(tar_path, "react-best-practices", dest)
+    meta = extract_skill(tar_path, "react-best-practices", dest)
 
     assert meta.name == "vercel-react-best-practices"
     assert meta.description == "React and Next.js performance optimization guidelines"
@@ -110,7 +105,7 @@ def test_extract_skill_standalone(tmp_path: Path) -> None:
     tar_path = tmp_path / "skill.tar.gz"
     tar_path.write_bytes(_standalone_tarball())
 
-    meta = _extract_skill(tar_path, "", dest)
+    meta = extract_skill(tar_path, "", dest)
 
     assert meta.name == "last30days"
     assert meta.has_scripts is True
@@ -124,8 +119,8 @@ def test_extract_skill_no_skill_md_raises(tmp_path: Path) -> None:
     tar_path = tmp_path / "skill.tar.gz"
     tar_path.write_bytes(_make_tarball({"owner-repo-abc123/README.md": "# Nothing\n"}))
 
-    with pytest.raises(RuntimeError, match="No SKILL.md found"):
-        _extract_skill(tar_path, "", dest)
+    with pytest.raises(SkillInstallError, match="No SKILL.md found"):
+        extract_skill(tar_path, "", dest)
 
 
 def test_extract_skill_excludes_git_dir(tmp_path: Path) -> None:
@@ -139,7 +134,7 @@ def test_extract_skill_excludes_git_dir(tmp_path: Path) -> None:
         })
     )
 
-    _extract_skill(tar_path, "", dest)
+    extract_skill(tar_path, "", dest)
 
     assert not (dest / "last30days" / ".git").exists()
 
@@ -152,7 +147,7 @@ def test_extract_skill_overwrites_existing(tmp_path: Path) -> None:
     tar_path = tmp_path / "skill.tar.gz"
     tar_path.write_bytes(_standalone_tarball())
 
-    _extract_skill(tar_path, "", dest)
+    extract_skill(tar_path, "", dest)
 
     assert not (dest / "last30days" / "stale.txt").exists()
     assert (dest / "last30days" / "SKILL.md").exists()
@@ -166,14 +161,12 @@ def test_extract_skill_validates_metadata(tmp_path: Path) -> None:
     tar_path = tmp_path / "skill.tar.gz"
     tar_path.write_bytes(_make_tarball({"owner-repo-abc123/SKILL.md": bad_skill_md}))
 
-    from autogen.beta.exceptions import InvalidSkillError
-
     with pytest.raises(InvalidSkillError):
-        _extract_skill(tar_path, "", dest)
+        extract_skill(tar_path, "", dest)
 
 
 # ---------------------------------------------------------------------------
-# search_skills  (patch _SkillsClient.search at class level)
+# search_skills  (patch SkillsClient.search at class level)
 # ---------------------------------------------------------------------------
 
 
@@ -188,7 +181,7 @@ async def test_search_skills_formats_output(tmp_path: Path) -> None:
         },
         {"skillId": "nextjs-patterns", "name": "nextjs-patterns", "installs": 5000, "source": "some-user/nextjs-skill"},
     ]
-    with patch.object(_SkillsClient, "search", AsyncMock(return_value=skills_data)):
+    with patch.object(SkillsClient, "search", AsyncMock(return_value=skills_data)):
         toolset = SkillSearchToolset(install_dir=tmp_path / "skills")
         result = await toolset.search_skills.model.call(query="react")
 
@@ -200,7 +193,7 @@ async def test_search_skills_formats_output(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_search_skills_no_results(tmp_path: Path) -> None:
-    with patch.object(_SkillsClient, "search", AsyncMock(return_value=[])):
+    with patch.object(SkillsClient, "search", AsyncMock(return_value=[])):
         toolset = SkillSearchToolset(install_dir=tmp_path / "skills")
         result = await toolset.search_skills.model.call(query="xyzzy-nonexistent")
 
@@ -209,7 +202,7 @@ async def test_search_skills_no_results(tmp_path: Path) -> None:
 
 @pytest.mark.asyncio
 async def test_search_skills_network_error(tmp_path: Path) -> None:
-    with patch.object(_SkillsClient, "search", AsyncMock(side_effect=Exception("connection refused"))):
+    with patch.object(SkillsClient, "search", AsyncMock(side_effect=Exception("connection refused"))):
         toolset = SkillSearchToolset(install_dir=tmp_path / "skills")
         result = await toolset.search_skills.model.call(query="react")
 
@@ -218,14 +211,14 @@ async def test_search_skills_network_error(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# install_skill  (patch _SkillsClient.download_skill at class level)
+# install_skill  (patch SkillsClient.download_skill at class level)
 # ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
 async def test_install_skill_monorepo(tmp_path: Path) -> None:
     meta = _make_meta(tmp_path)
-    with patch.object(_SkillsClient, "download_skill", AsyncMock(return_value=(meta, "abc123hash"))):
+    with patch.object(SkillsClient, "download_skill", AsyncMock(return_value=(meta, "abc123hash"))):
         toolset = SkillSearchToolset(install_dir=tmp_path / "skills")
         result = await toolset.install_skill.model.call(skill_id="vercel-labs/agent-skills/react-best-practices")
 
@@ -237,7 +230,7 @@ async def test_install_skill_monorepo(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_install_skill_standalone(tmp_path: Path) -> None:
     meta = _make_meta(tmp_path, name="last30days")
-    with patch.object(_SkillsClient, "download_skill", AsyncMock(return_value=(meta, "def456hash"))):
+    with patch.object(SkillsClient, "download_skill", AsyncMock(return_value=(meta, "def456hash"))):
         toolset = SkillSearchToolset(install_dir=tmp_path / "skills")
         result = await toolset.install_skill.model.call(skill_id="mvanhorn/last30days-skill")
 
@@ -249,7 +242,7 @@ async def test_install_skill_records_hash(tmp_path: Path) -> None:
     """install_skill should write hash to skills-lock.json."""
     install_dir = tmp_path / "skills"
     meta = _make_meta(tmp_path)
-    with patch.object(_SkillsClient, "download_skill", AsyncMock(return_value=(meta, "abc123hash"))):
+    with patch.object(SkillsClient, "download_skill", AsyncMock(return_value=(meta, "abc123hash"))):
         toolset = SkillSearchToolset(install_dir=install_dir)
         await toolset.install_skill.model.call(skill_id="vercel-labs/agent-skills/react-best-practices")
 
@@ -263,7 +256,7 @@ async def test_install_skill_records_hash(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_install_skill_rate_limit(tmp_path: Path) -> None:
     err = RuntimeError("GitHub rate limit exceeded. Set GITHUB_TOKEN")
-    with patch.object(_SkillsClient, "download_skill", AsyncMock(side_effect=err)):
+    with patch.object(SkillsClient, "download_skill", AsyncMock(side_effect=err)):
         toolset = SkillSearchToolset(install_dir=tmp_path / "skills")
         result = await toolset.install_skill.model.call(skill_id="some/repo/skill")
 
@@ -273,7 +266,7 @@ async def test_install_skill_rate_limit(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_install_skill_not_found(tmp_path: Path) -> None:
     err = RuntimeError("Skill not found: no-such/repo")
-    with patch.object(_SkillsClient, "download_skill", AsyncMock(side_effect=err)):
+    with patch.object(SkillsClient, "download_skill", AsyncMock(side_effect=err)):
         toolset = SkillSearchToolset(install_dir=tmp_path / "skills")
         result = await toolset.install_skill.model.call(skill_id="no-such/repo/skill")
 
@@ -353,12 +346,12 @@ async def test_remove_skill_path_traversal_blocked(tmp_path: Path) -> None:
 
 
 # ---------------------------------------------------------------------------
-# _SkillsLock
+# SkillsLock
 # ---------------------------------------------------------------------------
 
 
 def test_lock_record_and_read(tmp_path: Path) -> None:
-    lock = _SkillsLock(tmp_path / "skills-lock.json")
+    lock = SkillsLock(tmp_path / "skills-lock.json")
 
     lock.record("my-skill", "owner/repo", "abc123")
 
@@ -369,7 +362,7 @@ def test_lock_record_and_read(tmp_path: Path) -> None:
 
 
 def test_lock_remove(tmp_path: Path) -> None:
-    lock = _SkillsLock(tmp_path / "skills-lock.json")
+    lock = SkillsLock(tmp_path / "skills-lock.json")
     lock.record("skill-a", "a/b", "hash1")
     lock.record("skill-b", "c/d", "hash2")
 
@@ -381,7 +374,7 @@ def test_lock_remove(tmp_path: Path) -> None:
 
 
 def test_lock_get_hash(tmp_path: Path) -> None:
-    lock = _SkillsLock(tmp_path / "skills-lock.json")
+    lock = SkillsLock(tmp_path / "skills-lock.json")
     lock.record("my-skill", "owner/repo", "abc123")
 
     assert lock.get_hash("my-skill") == "abc123"
@@ -389,7 +382,7 @@ def test_lock_get_hash(tmp_path: Path) -> None:
 
 
 def test_lock_read_nonexistent(tmp_path: Path) -> None:
-    lock = _SkillsLock(tmp_path / "no-such-file.json")
+    lock = SkillsLock(tmp_path / "no-such-file.json")
 
     data = lock.read()
     assert data == {"version": 1, "skills": {}}
