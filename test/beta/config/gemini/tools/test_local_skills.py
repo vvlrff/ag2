@@ -9,6 +9,7 @@ from google.genai import types
 
 from autogen.beta.config.gemini.mappers import build_tools
 from autogen.beta.context import Context
+from autogen.beta.tools.local_skills.runtime import LocalRuntime
 from autogen.beta.tools.local_skills.tool import LocalSkillsTool
 
 SKILL_MD = """\
@@ -104,7 +105,7 @@ async def test_run_skill_script_schema(context: Context) -> None:
 @pytest.mark.asyncio
 async def test_full_toolset_schemas_build(tmp_path: Path, context: Context) -> None:
     _make_skill_dir(tmp_path)
-    tool = LocalSkillsTool(tmp_path)
+    tool = LocalSkillsTool(runtime=LocalRuntime(dir=tmp_path))
 
     schemas = []
     for attr in ("list_skills", "load_skill", "run_skill_script"):
@@ -125,7 +126,7 @@ async def test_full_toolset_schemas_build(tmp_path: Path, context: Context) -> N
 @pytest.mark.asyncio
 async def test_list_skills_returns_installed_skills(tmp_path: Path) -> None:
     _make_skill_dir(tmp_path)
-    tool = LocalSkillsTool(tmp_path)
+    tool = LocalSkillsTool(runtime=LocalRuntime(dir=tmp_path))
 
     result = await tool.list_skills.model.call()
 
@@ -140,7 +141,7 @@ async def test_list_skills_returns_installed_skills(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_load_skill_reads_skill_md(tmp_path: Path) -> None:
     _make_skill_dir(tmp_path)
-    tool = LocalSkillsTool(tmp_path)
+    tool = LocalSkillsTool(runtime=LocalRuntime(dir=tmp_path))
 
     content = await tool.load_skill.model.call(name="my-skill")
 
@@ -156,7 +157,7 @@ async def test_load_skill_reads_skill_md(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_run_skill_script_executes(tmp_path: Path) -> None:
     _make_skill_dir(tmp_path, has_scripts=True)
-    tool = LocalSkillsTool(tmp_path)
+    tool = LocalSkillsTool(runtime=LocalRuntime(dir=tmp_path))
 
     output = await tool.run_skill_script.model.call(name="my-skill", script="run.sh")
 

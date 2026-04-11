@@ -2,20 +2,18 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import asyncio
-import atexit
-import os
-import shutil
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from pathlib import Path
 
 from autogen.beta.exceptions import SkillDownloadError, SkillInstallError
 from autogen.beta.middleware import ToolMiddleware
 from autogen.beta.tools.final import Toolkit, tool
 from autogen.beta.tools.final.function_tool import FunctionTool
+from autogen.beta.tools.local_skills.runtime import LocalRuntime, SkillRuntime
 from autogen.beta.tools.local_skills.tool import LocalSkillsTool
 
 from .client import SkillsClient
+from .config import SkillsClientConfig
 from .extractor import format_install_result
 from .lock import SkillsLock
 
@@ -53,6 +51,17 @@ class SkillSearchToolset(Toolkit):
 
         asyncio.run(main())
 
+    Custom configuration::
+
+        from autogen.beta.tools import SkillSearchToolset, SkillsClientConfig
+        from autogen.beta.tools.local_skills import LocalRuntime
+
+        skills = SkillSearchToolset(
+            paths=["./extra-skills"],
+            runtime=LocalRuntime(dir="./my-skills", cleanup=True, timeout=30, blocked=["rm -rf"]),
+            client=SkillsClientConfig(github_token="ghp_...", proxy="http://proxy:8080"),
+        )
+
     Individual tools are available as attributes::
 
         agent = Agent("a", config=config, tools=[skills.search_skills, skills.install_skill])
@@ -67,37 +76,24 @@ class SkillSearchToolset(Toolkit):
 
     def __init__(
         self,
-        *extra_paths: str | Path,
-        install_dir: str | Path | None = None,
-        cleanup: bool = False,
-        github_token: str | None = None,
-        verify: bool | str = True,
-        script_timeout: float = 60,
-        script_max_output: int = 100_000,
-        script_blocked: list[str] | None = None,
+        paths: str | Path | Sequence[str | Path] | None = None,
+        *,
+        runtime: SkillRuntime | None = None,
+        client: SkillsClientConfig | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
-        _install_dir = Path(install_dir) if install_dir is not None else Path(".agents/skills")
-        client = SkillsClient(github_token or os.environ.get("GITHUB_TOKEN"), verify=verify)
-        lock = SkillsLock(_install_dir / "skills-lock.json")
-        local = LocalSkillsTool(
-            _install_dir,
-            *extra_paths,
-            script_timeout=script_timeout,
-            script_max_output=script_max_output,
-            script_blocked=script_blocked,
-        )
+        _runtime = runtime or LocalRuntime()
+        _client = SkillsClient(client)
+        lock = SkillsLock(_runtime.lock_dir / "skills-lock.json")
 
-        self.search_skills = _make_search_tool(client)
-        self.install_skill = _make_install_tool(client, lock, local, _install_dir)
-        self.remove_skill = _make_remove_tool(_install_dir, lock, local)
+        local = LocalSkillsTool(runtime=_runtime, extra_paths=paths)
+
+        self.search_skills = _make_search_tool(_client)
+        self.install_skill = _make_install_tool(_client, lock, _runtime, local)
+        self.remove_skill = _make_remove_tool(_runtime, lock, local)
         self.list_skills = local.list_skills
         self.load_skill = local.load_skill
         self.run_skill_script = local.run_skill_script
-
-        if cleanup:
-            atexit.register(shutil.rmtree, str(_install_dir), True)
-        atexit.register(_schedule_close, client)
 
         super().__init__(
             self.search_skills,
@@ -147,8 +143,8 @@ def _make_search_tool(client: SkillsClient) -> FunctionTool:
 def _make_install_tool(
     client: SkillsClient,
     lock: SkillsLock,
+    runtime: SkillRuntime,
     local: LocalSkillsTool,
-    install_dir: Path,
 ) -> FunctionTool:
     @tool
     async def install_skill(skill_id: str) -> str:
@@ -168,10 +164,12 @@ def _make_install_tool(
             return f"Invalid skill_id format: {skill_id!r}. Expected 'owner/repo/skill-name' or 'owner/repo'."
 
         try:
-            install_dir.mkdir(parents=True, exist_ok=True)
-            meta, computed_hash = await client.download_skill(source, sid, install_dir)
+            if isinstance(runtime, LocalRuntime):
+                runtime.install_dir.mkdir(parents=True, exist_ok=True)
+            meta, computed_hash = await client.download_skill(source, sid, runtime)
             lock.record(meta.name, source, computed_hash)
-            local.loader.invalidate()
+            runtime.invalidate()
+            install_dir = runtime.lock_dir
             return format_install_result(meta, install_dir)
         except (SkillDownloadError, SkillInstallError) as e:
             return str(e)
@@ -181,7 +179,7 @@ def _make_install_tool(
     return install_skill
 
 
-def _make_remove_tool(install_dir: Path, lock: SkillsLock, local: LocalSkillsTool) -> FunctionTool:
+def _make_remove_tool(runtime: SkillRuntime, lock: SkillsLock, local: LocalSkillsTool) -> FunctionTool:
     @tool
     def remove_skill(name: str) -> str:
         """Remove an installed skill by name.
@@ -189,28 +187,12 @@ def _make_remove_tool(install_dir: Path, lock: SkillsLock, local: LocalSkillsToo
         Args:
             name: Skill name as returned by list_skills().
         """
-        skill_path = (install_dir / name).resolve()
-        if not skill_path.is_relative_to(install_dir.resolve()) or not skill_path.exists():
-            return f"Cannot remove '{name}': not in install_dir {install_dir}"
-        shutil.rmtree(skill_path)
+        try:
+            runtime.remove(name)
+        except (ValueError, FileNotFoundError) as e:
+            return str(e)
         lock.remove(name)
-        local.loader.invalidate()
+        runtime.invalidate()
         return f"Removed: {name}"
 
     return remove_skill
-
-
-def _schedule_close(client: SkillsClient) -> None:
-    """Schedule async client close at process exit (best-effort)."""
-    try:
-        loop = asyncio.get_running_loop()
-        loop.create_task(client.close())
-    except RuntimeError:
-        # No running event loop (normal at process exit after asyncio.run()).
-        # The AsyncClient was created in the now-closed loop — attempting
-        # asyncio.run(client.close()) would spin up a *new* loop, but the
-        # transport objects are still bound to the old one and will raise
-        # "RuntimeError: Event loop is closed" when aclose() tries to
-        # schedule callbacks.  Drop the reference instead; the OS reclaims
-        # all TCP sockets at process exit.
-        client._client = None

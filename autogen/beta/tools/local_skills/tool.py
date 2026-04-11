@@ -4,6 +4,7 @@
 
 import shlex
 import stat
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Annotated
 
@@ -11,9 +12,9 @@ from pydantic import Field
 
 from autogen.beta.tools.final import Toolkit, tool
 from autogen.beta.tools.final.function_tool import FunctionTool
-from autogen.beta.tools.shell.environment.local import LocalShellEnvironment
 
 from .loader import SkillLoader
+from .runtime import LocalRuntime, SkillRuntime
 
 
 class LocalSkillsTool(Toolkit):
@@ -24,18 +25,20 @@ class LocalSkillsTool(Toolkit):
     1. **list_skills()** — returns a lightweight catalog (name + description).
     2. **load_skill(name)** — returns the full ``SKILL.md`` instructions on demand.
     3. **run_skill_script(name, script, args)** — executes a script from the
-       skill's ``scripts/`` directory via :class:`~autogen.beta.tools.shell.LocalShellEnvironment`.
+       skill's ``scripts/`` directory.
 
     Works with *any* provider (no provider-specific API required).
 
     Example::
 
-        # Scan default paths (.agents/skills)
+        # Default runtime (.agents/skills)
         LocalSkillsTool()
 
-        # Scan only the given paths (defaults are NOT included)
-        LocalSkillsTool("./skills")
-        LocalSkillsTool("/path/to/skills-a", "/path/to/skills-b")
+        # Custom install directory
+        LocalSkillsTool(runtime=LocalRuntime("./skills"))
+
+        # Additional read-only search paths
+        LocalSkillsTool(runtime=LocalRuntime("./skills"), extra_paths=["./shared-skills"])
     """
 
     list_skills: FunctionTool
@@ -44,24 +47,34 @@ class LocalSkillsTool(Toolkit):
 
     def __init__(
         self,
-        *paths: str | Path,
-        script_timeout: float = 60,
-        script_max_output: int = 100_000,
-        script_blocked: list[str] | None = None,
+        runtime: SkillRuntime | None = None,
+        extra_paths: str | Path | Sequence[str | Path] | None = None,
     ) -> None:
-        loader = SkillLoader(*paths)
-        self.loader = loader
+        _runtime = runtime or LocalRuntime()
+
+        extra: list[Path]
+        if extra_paths is None:
+            extra = []
+        elif isinstance(extra_paths, (str, Path)):
+            extra = [Path(extra_paths)]
+        else:
+            extra = [Path(p) for p in extra_paths]
+
+        # Build a combined loader that scans install_dir + extra_paths.
+        # For LocalRuntime we know the install directory; for other runtimes
+        # only the extra_paths are scanned locally.
+        if isinstance(_runtime, LocalRuntime):
+            loader_paths: list[Path] = [_runtime.install_dir, *extra]
+        else:
+            loader_paths = extra
+
+        loader = SkillLoader(*loader_paths) if loader_paths else SkillLoader()
+
         self.list_skills = _make_list_tool(loader)
         self.load_skill = _make_load_tool(loader)
-        self.run_skill_script = _make_run_tool(
-            loader,
-            timeout=script_timeout,
-            max_output=script_max_output,
-            blocked=script_blocked,
-        )
+        self.run_skill_script = _make_run_tool(loader, _runtime)
 
-        tools = [self.list_skills, self.load_skill, self.run_skill_script]
-        super().__init__(*tools)
+        super().__init__(self.list_skills, self.load_skill, self.run_skill_script)
 
 
 def _make_list_tool(loader: SkillLoader) -> FunctionTool:
@@ -82,14 +95,8 @@ def _make_load_tool(loader: SkillLoader) -> FunctionTool:
     return load_skill
 
 
-def _make_run_tool(
-    loader: SkillLoader,
-    *,
-    timeout: float = 60,
-    max_output: int = 100_000,
-    blocked: list[str] | None = None,
-) -> FunctionTool:
-    @tool(description=("Run a script from a skill's scripts directory. Only .py and .sh scripts are supported."))
+def _make_run_tool(loader: SkillLoader, runtime: SkillRuntime) -> FunctionTool:
+    @tool(description="Run a script from a skill's scripts directory. Only .py and .sh scripts are supported.")
     def run_skill_script(
         name: Annotated[str, Field(description="Skill name returned by list_skills.")],
         script: Annotated[
@@ -128,13 +135,7 @@ def _make_run_tool(
         if args:
             command.extend(args)
 
-        env = LocalShellEnvironment(
-            path=scripts_dir,
-            cleanup=False,
-            timeout=timeout,
-            max_output=max_output,
-            blocked=blocked,
-        )
+        env = runtime.shell(scripts_dir)
         return env.run(shlex.join(command))
 
     return run_skill_script

@@ -20,9 +20,10 @@ from .builtin import (
     WebSearchTool,
 )
 from .final import Toolkit, tool
-from .local_skills import LocalSkillsTool
+from .local_skills import LocalRuntime, LocalSkillsTool, SkillRuntime
 from .shell import LocalShellEnvironment, LocalShellTool, ShellEnvironment
 from .toolkits import FilesystemToolset, SkillSearchToolset
+from .toolkits.skill_search import SkillsClientConfig
 
 __all__ = (
     "CodeExecutionTool",
@@ -30,6 +31,7 @@ __all__ = (
     "ContainerReferenceEnvironment",
     "FilesystemToolset",
     "ImageGenerationTool",
+    "LocalRuntime",
     "LocalShellEnvironment",
     "LocalShellTool",
     "LocalSkillsTool",
@@ -39,7 +41,9 @@ __all__ = (
     "ShellEnvironment",
     "ShellTool",
     "Skill",
+    "SkillRuntime",
     "SkillSearchToolset",
+    "SkillsClientConfig",
     "SkillsTool",
     "ToolResult",
     "Toolkit",
