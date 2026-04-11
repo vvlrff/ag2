@@ -17,7 +17,7 @@ class Skill:
     """A reference to a provider-managed skill.
 
     Args:
-        id: Skill identifier (e.g. ``"pptx"``, ``"xlsx"``, ``"skill_abc123"``).
+        id: Skill identifier (such as ``"pptx"``, ``"xlsx"``, ``"skill_abc123"``).
         version: Version pin. ``None`` means the provider uses its latest version.
     """
 
