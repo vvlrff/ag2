@@ -43,8 +43,6 @@ __all__ = (
     "Skill",
     "SkillMetadata",
     "SkillRuntime",
-    "SkillSearchToolset",
-    "SkillsClientConfig",
     "SkillsTool",
     "ToolResult",
     "Toolkit",
