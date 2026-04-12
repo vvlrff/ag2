@@ -21,8 +21,7 @@ class SkillRuntime(Protocol):
     2. **Discovery** — scanning for installed skills (``discover``, ``load``, ``invalidate``).
     3. **Execution** — providing a shell environment to run scripts (``shell``).
 
-    :class:`LocalRuntime` is the default implementation.  A ``DockerRuntime``
-    can be added later without changes to the framework code.
+    :class:`LocalRuntime` is the default implementation.
     """
 
     @property

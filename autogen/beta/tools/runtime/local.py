@@ -32,20 +32,16 @@ class LocalRuntime:
     Example::
 
         # Default — installs to .agents/skills
-        SkillSearchToolset()
+        LocalRuntime()
 
-        # Custom directory
-        SkillSearchToolset(runtime=LocalRuntime("./my-skills"))
+        # Custom install directory
+        LocalRuntime("./my-skills")
 
         # Full control
-        SkillSearchToolset(
-            runtime=LocalRuntime("./my-skills", timeout=30, cleanup=True, blocked=["rm -rf"]),
-        )
+        LocalRuntime("./my-skills", timeout=30, cleanup=True, blocked=["rm -rf"])
 
         # Extra read-only search paths
-        SkillSearchToolset(
-            runtime=LocalRuntime("./my-skills", extra_paths=["./shared-skills"]),
-        )
+        LocalRuntime("./my-skills", extra_paths=["./shared-skills"])
     """
 
     dir: str | Path | None = None
