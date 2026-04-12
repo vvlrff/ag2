@@ -4,8 +4,6 @@
 
 import shlex
 import stat
-import warnings
-from collections.abc import Sequence
 from pathlib import Path
 from typing import Annotated
 
@@ -31,7 +29,7 @@ class LocalSkillsTool(Toolkit):
 
     Example::
 
-        # Default runtime (.agents/skills)
+        # Default runtime (.agents/skills + ~/.agents/skills)
         LocalSkillsTool()
 
         # Custom install directory
@@ -48,26 +46,8 @@ class LocalSkillsTool(Toolkit):
     def __init__(
         self,
         runtime: SkillRuntime | None = None,
-        extra_paths: str | Path | Sequence[str | Path] | None = None,
     ) -> None:
-        if runtime is None:
-            # Normalize extra_paths for LocalRuntime
-            extra: Sequence[str | Path] | None
-            if extra_paths is None:
-                extra = None
-            elif isinstance(extra_paths, (str, Path)):
-                extra = [extra_paths]
-            else:
-                extra = list(extra_paths)
-            _runtime: SkillRuntime = LocalRuntime(extra_paths=extra)
-        else:
-            if extra_paths is not None:
-                warnings.warn(
-                    "extra_paths is ignored when an explicit runtime is provided. "
-                    "Pass extra_paths to LocalRuntime(extra_paths=...) instead.",
-                    stacklevel=2,
-                )
-            _runtime = runtime
+        _runtime: SkillRuntime = runtime if runtime is not None else LocalRuntime()
 
         self.list_skills = _make_list_tool(_runtime)
         self.load_skill = _make_load_tool(_runtime)
