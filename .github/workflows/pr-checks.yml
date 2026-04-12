@@ -137,6 +137,8 @@ jobs:
   build-mkdocs:
     needs: docs-paths-filter
     if: needs.docs-paths-filter.outputs.hasChanges == 'true'
+    permissions:
+      contents: read
     uses: ./.github/workflows/build-mkdocs.yml
     with:
       python-version: "3.10"
