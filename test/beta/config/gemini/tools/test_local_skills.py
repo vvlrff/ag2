@@ -8,7 +8,7 @@ import pytest
 from google.genai import types
 
 from autogen.beta.config.gemini.mappers import build_tools
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext
 from autogen.beta.tools.local_skills.tool import LocalSkillsTool
 from autogen.beta.tools.runtime import LocalRuntime
 
@@ -41,7 +41,7 @@ def _make_skill_dir(base: Path, name: str = "my-skill", has_scripts: bool = Fals
 
 
 @pytest.mark.asyncio
-async def test_list_skills_schema(context: Context) -> None:
+async def test_list_skills_schema(context: ConversationContext) -> None:
     """list_skills is parameterless — Gemini requires type=object, not null."""
     tool = LocalSkillsTool()
 
@@ -60,7 +60,7 @@ async def test_list_skills_schema(context: Context) -> None:
 
 
 @pytest.mark.asyncio
-async def test_load_skill_schema(context: Context) -> None:
+async def test_load_skill_schema(context: ConversationContext) -> None:
     tool = LocalSkillsTool()
 
     [schema] = await tool.load_skill.schemas(context)
@@ -78,7 +78,7 @@ async def test_load_skill_schema(context: Context) -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_skill_script_schema(context: Context) -> None:
+async def test_run_skill_script_schema(context: ConversationContext) -> None:
     tool = LocalSkillsTool()
 
     [schema] = await tool.run_skill_script.schemas(context)
@@ -103,7 +103,7 @@ async def test_run_skill_script_schema(context: Context) -> None:
 
 
 @pytest.mark.asyncio
-async def test_full_toolset_schemas_build(tmp_path: Path, context: Context) -> None:
+async def test_full_toolset_schemas_build(tmp_path: Path, context: ConversationContext) -> None:
     _make_skill_dir(tmp_path)
     tool = LocalSkillsTool(runtime=LocalRuntime(dir=tmp_path))
 
