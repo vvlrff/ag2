@@ -20,7 +20,8 @@ from .builtin import (
     WebSearchTool,
 )
 from .final import Toolkit, tool
-from .local_skills import LocalRuntime, LocalSkillsTool, SkillRuntime
+from .local_skills import LocalSkillsTool
+from .runtime import LocalRuntime, SkillMetadata, SkillRuntime
 from .shell import LocalShellEnvironment, LocalShellTool, ShellEnvironment
 from .toolkits import FilesystemToolset, SkillSearchToolset
 from .toolkits.skill_search import SkillsClientConfig
@@ -41,6 +42,7 @@ __all__ = (
     "ShellEnvironment",
     "ShellTool",
     "Skill",
+    "SkillMetadata",
     "SkillRuntime",
     "SkillSearchToolset",
     "SkillsClientConfig",

@@ -12,11 +12,11 @@ from dirty_equals import IsPartialDict
 from autogen.beta.context import Context
 from autogen.beta.exceptions import InvalidSkillError, InvalidSkillNameError, SkillNotFoundError
 from autogen.beta.tools.local_skills.loader import SkillLoader, parse_frontmatter
-from autogen.beta.tools.local_skills.runtime import LocalRuntime
 from autogen.beta.tools.local_skills.tool import (
     LocalSkillsTool,
     _make_run_tool,
 )
+from autogen.beta.tools.runtime import LocalRuntime
 from autogen.beta.tools.shell.environment.local import LocalShellEnvironment
 
 
@@ -246,8 +246,7 @@ async def test_tool_exposes_three_functions(skill_tree: Path, context: Context) 
 
 @pytest.mark.asyncio
 async def test_run_skill_script_schema(skill_tree: Path, context: Context) -> None:
-    loader = SkillLoader(skill_tree)
-    run_tool = _make_run_tool(loader, LocalRuntime())
+    run_tool = _make_run_tool(LocalRuntime(dir=skill_tree))
 
     [schema] = await run_tool.schemas(context)
 

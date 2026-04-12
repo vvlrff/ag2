@@ -9,8 +9,8 @@ from google.genai import types
 
 from autogen.beta.config.gemini.mappers import build_tools
 from autogen.beta.context import Context
-from autogen.beta.tools.local_skills.runtime import LocalRuntime
 from autogen.beta.tools.local_skills.tool import LocalSkillsTool
+from autogen.beta.tools.runtime import LocalRuntime
 
 SKILL_MD = """\
 ---

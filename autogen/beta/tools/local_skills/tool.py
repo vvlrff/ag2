@@ -4,6 +4,7 @@
 
 import shlex
 import stat
+import warnings
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Annotated
@@ -12,9 +13,8 @@ from pydantic import Field
 
 from autogen.beta.tools.final import Toolkit, tool
 from autogen.beta.tools.final.function_tool import FunctionTool
-
-from .loader import SkillLoader
-from .runtime import LocalRuntime, SkillRuntime
+from autogen.beta.tools.runtime.local import LocalRuntime
+from autogen.beta.tools.runtime.protocol import SkillRuntime
 
 
 class LocalSkillsTool(Toolkit):
@@ -38,7 +38,7 @@ class LocalSkillsTool(Toolkit):
         LocalSkillsTool(runtime=LocalRuntime("./skills"))
 
         # Additional read-only search paths
-        LocalSkillsTool(runtime=LocalRuntime("./skills"), extra_paths=["./shared-skills"])
+        LocalSkillsTool(runtime=LocalRuntime("./skills", extra_paths=["./shared-skills"]))
     """
 
     list_skills: FunctionTool
@@ -50,52 +50,51 @@ class LocalSkillsTool(Toolkit):
         runtime: SkillRuntime | None = None,
         extra_paths: str | Path | Sequence[str | Path] | None = None,
     ) -> None:
-        _runtime = runtime or LocalRuntime()
-
-        extra: list[Path]
-        if extra_paths is None:
-            extra = []
-        elif isinstance(extra_paths, (str, Path)):
-            extra = [Path(extra_paths)]
+        if runtime is None:
+            # Normalize extra_paths for LocalRuntime
+            extra: Sequence[str | Path] | None
+            if extra_paths is None:
+                extra = None
+            elif isinstance(extra_paths, (str, Path)):
+                extra = [extra_paths]
+            else:
+                extra = list(extra_paths)
+            _runtime: SkillRuntime = LocalRuntime(extra_paths=extra)
         else:
-            extra = [Path(p) for p in extra_paths]
+            if extra_paths is not None:
+                warnings.warn(
+                    "extra_paths is ignored when an explicit runtime is provided. "
+                    "Pass extra_paths to LocalRuntime(extra_paths=...) instead.",
+                    stacklevel=2,
+                )
+            _runtime = runtime
 
-        # Build a combined loader that scans install_dir + extra_paths.
-        # For LocalRuntime we know the install directory; for other runtimes
-        # only the extra_paths are scanned locally.
-        if isinstance(_runtime, LocalRuntime):
-            loader_paths: list[Path] = [_runtime.install_dir, *extra]
-        else:
-            loader_paths = extra
-
-        loader = SkillLoader(*loader_paths) if loader_paths else SkillLoader()
-
-        self.list_skills = _make_list_tool(loader)
-        self.load_skill = _make_load_tool(loader)
-        self.run_skill_script = _make_run_tool(loader, _runtime)
+        self.list_skills = _make_list_tool(_runtime)
+        self.load_skill = _make_load_tool(_runtime)
+        self.run_skill_script = _make_run_tool(_runtime)
 
         super().__init__(self.list_skills, self.load_skill, self.run_skill_script)
 
 
-def _make_list_tool(loader: SkillLoader) -> FunctionTool:
+def _make_list_tool(runtime: SkillRuntime) -> FunctionTool:
     @tool(description="List available local skills with name and short description.")
     def list_skills() -> list[dict[str, str]]:
-        return [{"name": m.name, "description": m.description} for m in loader.discover()]
+        return [{"name": m.name, "description": m.description} for m in runtime.discover()]
 
     return list_skills
 
 
-def _make_load_tool(loader: SkillLoader) -> FunctionTool:
+def _make_load_tool(runtime: SkillRuntime) -> FunctionTool:
     @tool(description="Load the full SKILL.md content for a specific skill.")
     def load_skill(
         name: Annotated[str, Field(description="Skill name returned by list_skills.")],
     ) -> str:
-        return loader.load(name)
+        return runtime.load(name)
 
     return load_skill
 
 
-def _make_run_tool(loader: SkillLoader, runtime: SkillRuntime) -> FunctionTool:
+def _make_run_tool(runtime: SkillRuntime) -> FunctionTool:
     @tool(description="Run a script from a skill's scripts directory. Only .py and .sh scripts are supported.")
     def run_skill_script(
         name: Annotated[str, Field(description="Skill name returned by list_skills.")],
@@ -108,7 +107,7 @@ def _make_run_tool(loader: SkillLoader, runtime: SkillRuntime) -> FunctionTool:
             Field(description="Optional script arguments passed as positional parameters."),
         ] = None,
     ) -> str:
-        skill_dir = loader.get_path(name)
+        skill_dir = runtime.get_path(name)
         scripts_dir = skill_dir / "scripts"
         script_path = Path(script)
         if script_path.name != script:

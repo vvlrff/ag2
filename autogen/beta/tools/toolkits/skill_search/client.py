@@ -10,8 +10,7 @@ from pathlib import Path
 import httpx
 
 from autogen.beta.exceptions import SkillDownloadError
-from autogen.beta.tools.local_skills.loader import SkillMetadata
-from autogen.beta.tools.local_skills.runtime import SkillRuntime
+from autogen.beta.tools.runtime import SkillMetadata, SkillRuntime
 
 from .config import SkillsClientConfig
 from .extractor import extract_skill

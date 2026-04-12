@@ -13,8 +13,7 @@ import pytest
 
 from autogen.beta.context import Context
 from autogen.beta.exceptions import InvalidSkillError, SkillInstallError
-from autogen.beta.tools.local_skills.loader import SkillMetadata
-from autogen.beta.tools.local_skills.runtime import LocalRuntime
+from autogen.beta.tools.runtime import LocalRuntime, SkillMetadata
 from autogen.beta.tools.toolkits.skill_search import SkillSearchToolset
 from autogen.beta.tools.toolkits.skill_search.client import SkillsClient
 from autogen.beta.tools.toolkits.skill_search.extractor import extract_skill

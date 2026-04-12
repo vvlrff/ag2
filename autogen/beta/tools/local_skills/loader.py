@@ -3,12 +3,12 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import re
-from dataclasses import dataclass
 from pathlib import Path
 
 import yaml
 
 from autogen.beta.exceptions import InvalidSkillError, InvalidSkillNameError, SkillNotFoundError
+from autogen.beta.tools.skill_types import SkillMetadata
 
 
 def parse_frontmatter(text: str) -> dict[str, object]:
@@ -24,19 +24,6 @@ def parse_frontmatter(text: str) -> dict[str, object]:
         return {}
     parsed = yaml.safe_load(text[3:end].strip())
     return {str(k): v for k, v in parsed.items()} if isinstance(parsed, dict) else {}
-
-
-@dataclass
-class SkillMetadata:
-    """Metadata parsed from a skill's SKILL.md frontmatter."""
-
-    name: str
-    description: str
-    path: Path
-    has_scripts: bool
-    version: str | None = None
-    license: str | None = None
-    compatibility: str | None = None
 
 
 class SkillLoader:

@@ -9,8 +9,8 @@ from autogen.beta.exceptions import SkillDownloadError, SkillInstallError
 from autogen.beta.middleware import ToolMiddleware
 from autogen.beta.tools.final import Toolkit, tool
 from autogen.beta.tools.final.function_tool import FunctionTool
-from autogen.beta.tools.local_skills.runtime import LocalRuntime, SkillRuntime
 from autogen.beta.tools.local_skills.tool import LocalSkillsTool
+from autogen.beta.tools.runtime import LocalRuntime, SkillRuntime
 
 from .client import SkillsClient
 from .config import SkillsClientConfig
@@ -53,12 +53,16 @@ class SkillSearchToolset(Toolkit):
 
     Custom configuration::
 
-        from autogen.beta.tools import SkillSearchToolset, SkillsClientConfig
-        from autogen.beta.tools.local_skills import LocalRuntime
+        from autogen.beta.tools import SkillSearchToolset, SkillsClientConfig, LocalRuntime
 
         skills = SkillSearchToolset(
-            paths=["./extra-skills"],
-            runtime=LocalRuntime(dir="./my-skills", cleanup=True, timeout=30, blocked=["rm -rf"]),
+            runtime=LocalRuntime(
+                dir="./my-skills",
+                extra_paths=["./extra-skills"],
+                cleanup=True,
+                timeout=30,
+                blocked=["rm -rf"],
+            ),
             client=SkillsClientConfig(github_token="ghp_...", proxy="http://proxy:8080"),
         )
 
@@ -82,15 +86,27 @@ class SkillSearchToolset(Toolkit):
         client: SkillsClientConfig | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
-        _runtime = runtime or LocalRuntime()
+        if runtime is None:
+            # Normalize paths for LocalRuntime.extra_paths
+            extra: Sequence[str | Path] | None
+            if paths is None:
+                extra = None
+            elif isinstance(paths, (str, Path)):
+                extra = [paths]
+            else:
+                extra = list(paths)
+            _runtime: SkillRuntime = LocalRuntime(extra_paths=extra)
+        else:
+            _runtime = runtime
+
         _client = SkillsClient(client)
         lock = SkillsLock(_runtime.lock_dir / "skills-lock.json")
 
-        local = LocalSkillsTool(runtime=_runtime, extra_paths=paths)
+        local = LocalSkillsTool(runtime=_runtime)
 
         self.search_skills = _make_search_tool(_client)
-        self.install_skill = _make_install_tool(_client, lock, _runtime, local)
-        self.remove_skill = _make_remove_tool(_runtime, lock, local)
+        self.install_skill = _make_install_tool(_client, lock, _runtime)
+        self.remove_skill = _make_remove_tool(_runtime, lock)
         self.list_skills = local.list_skills
         self.load_skill = local.load_skill
         self.run_skill_script = local.run_skill_script
@@ -144,7 +160,6 @@ def _make_install_tool(
     client: SkillsClient,
     lock: SkillsLock,
     runtime: SkillRuntime,
-    local: LocalSkillsTool,
 ) -> FunctionTool:
     @tool
     async def install_skill(skill_id: str) -> str:
@@ -164,8 +179,7 @@ def _make_install_tool(
             return f"Invalid skill_id format: {skill_id!r}. Expected 'owner/repo/skill-name' or 'owner/repo'."
 
         try:
-            if isinstance(runtime, LocalRuntime):
-                runtime.install_dir.mkdir(parents=True, exist_ok=True)
+            runtime.ensure_storage()
             meta, computed_hash = await client.download_skill(source, sid, runtime)
             lock.record(meta.name, source, computed_hash)
             runtime.invalidate()
@@ -179,7 +193,7 @@ def _make_install_tool(
     return install_skill
 
 
-def _make_remove_tool(runtime: SkillRuntime, lock: SkillsLock, local: LocalSkillsTool) -> FunctionTool:
+def _make_remove_tool(runtime: SkillRuntime, lock: SkillsLock) -> FunctionTool:
     @tool
     def remove_skill(name: str) -> str:
         """Remove an installed skill by name.
