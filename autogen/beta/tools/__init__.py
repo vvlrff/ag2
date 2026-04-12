@@ -23,13 +23,13 @@ from .final import Toolkit, tool
 from .local_skills import LocalSkillsTool
 from .runtime import LocalRuntime, SkillMetadata, SkillRuntime
 from .shell import LocalShellEnvironment, LocalShellTool, ShellEnvironment
-from .toolkits import FilesystemToolset
+from .toolkits import FilesystemToolkit
 
 __all__ = (
     "CodeExecutionTool",
     "ContainerAutoEnvironment",
     "ContainerReferenceEnvironment",
-    "FilesystemToolset",
+    "FilesystemToolkit",
     "ImageGenerationTool",
     "LocalRuntime",
     "LocalShellEnvironment",
