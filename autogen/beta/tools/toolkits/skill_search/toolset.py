@@ -2,8 +2,7 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from collections.abc import Iterable, Sequence
-from pathlib import Path
+from collections.abc import Iterable
 
 from autogen.beta.exceptions import SkillDownloadError, SkillInstallError
 from autogen.beta.middleware import ToolMiddleware
@@ -80,24 +79,12 @@ class SkillSearchToolset(Toolkit):
 
     def __init__(
         self,
-        paths: str | Path | Sequence[str | Path] | None = None,
         *,
         runtime: SkillRuntime | None = None,
         client: SkillsClientConfig | None = None,
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
-        if runtime is None:
-            # Normalize paths for LocalRuntime.extra_paths
-            extra: Sequence[str | Path] | None
-            if paths is None:
-                extra = None
-            elif isinstance(paths, (str, Path)):
-                extra = [paths]
-            else:
-                extra = list(paths)
-            _runtime: SkillRuntime = LocalRuntime(extra_paths=extra)
-        else:
-            _runtime = runtime
+        _runtime: SkillRuntime = runtime if runtime is not None else LocalRuntime()
 
         _client = SkillsClient(client)
         lock = SkillsLock(_runtime.lock_dir / "skills-lock.json")
