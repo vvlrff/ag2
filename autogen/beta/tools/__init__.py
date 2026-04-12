@@ -21,6 +21,7 @@ from .builtin import (
 )
 from .final import Toolkit, tool
 from .local_skills import LocalSkillsTool
+from .runtime import LocalRuntime, SkillMetadata, SkillRuntime
 from .shell import LocalShellEnvironment, LocalShellTool, ShellEnvironment
 from .toolkits import FilesystemToolset
 
@@ -30,6 +31,7 @@ __all__ = (
     "ContainerReferenceEnvironment",
     "FilesystemToolset",
     "ImageGenerationTool",
+    "LocalRuntime",
     "LocalShellEnvironment",
     "LocalShellTool",
     "LocalSkillsTool",
@@ -39,6 +41,10 @@ __all__ = (
     "ShellEnvironment",
     "ShellTool",
     "Skill",
+    "SkillMetadata",
+    "SkillRuntime",
+    "SkillSearchToolset",
+    "SkillsClientConfig",
     "SkillsTool",
     "ToolResult",
     "Toolkit",
