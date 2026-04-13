@@ -2,43 +2,21 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from __future__ import annotations
-
-import dataclasses
 import json
 from collections.abc import Callable, Iterable
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from pydantic import BaseModel, Field
 
-if TYPE_CHECKING:
-    from autogen.beta.agent import Agent
-    from autogen.beta.config.config import ModelConfig
-    from autogen.beta.middleware.base import MiddlewareFactory
-    from autogen.beta.response.proto import ResponseProto
-    from autogen.beta.tools.tool import Tool
+from autogen.beta.agent import Agent
+from autogen.beta.config.config import ModelConfig
+from autogen.beta.middleware.base import MiddlewareFactory
+from autogen.beta.response.proto import ResponseProto
+from autogen.beta.response.schema import RawSchema
+from autogen.beta.tools.final.function_tool import FunctionTool
+from autogen.beta.tools.tool import Tool
 
-__all__ = ("AgentSpec", "ConfigSpec", "ResponseSchemaSpec")
-
-
-_CONFIG_CLASS_TO_PROVIDER: dict[str, str] = {
-    "OpenAIConfig": "openai",
-    "OpenAIResponsesConfig": "openai_responses",
-    "AnthropicConfig": "anthropic",
-    "GeminiConfig": "gemini",
-    "OllamaConfig": "ollama",
-    "DashScopeConfig": "dashscope",
-}
-
-_NON_SERIALIZABLE_FIELDS = frozenset({
-    "http_client",
-})
-
-
-def _is_sentinel(value: object) -> bool:
-    """Return True if *value* is a provider-SDK sentinel (e.g. OpenAI ``omit`` / ``not_given``)."""
-    type_name = type(value).__name__
-    return type_name in ("Omit", "NotGiven", "NotGivenOr")
+__all__ = ("AgentSpec", "ResponseSchemaSpec")
 
 
 def _is_json_safe(value: object) -> bool:
@@ -50,94 +28,6 @@ def _is_json_safe(value: object) -> bool:
         return False
 
 
-class ConfigSpec(BaseModel):
-    """JSON-serializable description of an LLM provider config."""
-
-    provider: str
-    """Provider identifier, e.g. ``"openai"``, ``"anthropic"``, ``"gemini"``."""
-
-    model: str
-    """Model name, e.g. ``"gpt-4o"``, ``"claude-sonnet-4-20250514"``."""
-
-    params: dict[str, Any] = Field(default_factory=dict)
-    """Extra serializable parameters (temperature, top_p, max_tokens, ...)."""
-
-    @classmethod
-    def from_config(cls, config: ModelConfig) -> ConfigSpec:
-        """Extract a ``ConfigSpec`` from a live ``ModelConfig`` dataclass."""
-        class_name = type(config).__name__
-        provider = _CONFIG_CLASS_TO_PROVIDER.get(class_name)
-        if provider is None:
-            raise ValueError(f"Unknown config class {class_name!r}. Known: {list(_CONFIG_CLASS_TO_PROVIDER)}")
-
-        model: str | None = None
-        params: dict[str, Any] = {}
-
-        for f in dataclasses.fields(config):
-            if f.name in _NON_SERIALIZABLE_FIELDS:
-                continue
-
-            value = getattr(config, f.name)
-
-            if _is_sentinel(value) or value is None:
-                continue
-
-            if f.name == "model":
-                model = str(value)
-                continue
-
-            if not _is_json_safe(value):
-                continue
-
-            params[f.name] = value
-
-        if model is None:
-            raise ValueError(f"Config {class_name} has no 'model' field or it is None")
-
-        return cls(provider=provider, model=model, params=params)
-
-    def to_config(self) -> ModelConfig:
-        """Reconstruct a ``ModelConfig`` dataclass from this spec.
-
-        Raises ``ImportError`` if the provider's optional dependency is not installed.
-        Raises ``ValueError`` if the provider string is unknown.
-        """
-        config_cls = _import_config_class(self.provider)
-        return config_cls(model=self.model, **self.params)
-
-
-def _import_config_class(provider: str) -> type:
-    """Lazily import and return the config dataclass for *provider*."""
-    if provider == "openai":
-        from autogen.beta.config.openai.config import OpenAIConfig
-
-        return OpenAIConfig
-    if provider == "openai_responses":
-        from autogen.beta.config.openai.config import OpenAIResponsesConfig
-
-        return OpenAIResponsesConfig
-    if provider == "anthropic":
-        from autogen.beta.config.anthropic.config import AnthropicConfig
-
-        return AnthropicConfig
-    if provider == "gemini":
-        from autogen.beta.config.gemini.config import GeminiConfig
-
-        return GeminiConfig
-    if provider == "ollama":
-        from autogen.beta.config.ollama.config import OllamaConfig
-
-        return OllamaConfig
-    if provider == "dashscope":
-        from autogen.beta.config.dashscope.config import DashScopeConfig
-
-        return DashScopeConfig
-
-    raise ValueError(
-        f"Unknown provider {provider!r}. Known: openai, openai_responses, anthropic, gemini, ollama, dashscope"
-    )
-
-
 class ResponseSchemaSpec(BaseModel):
     """JSON-serializable description of a response schema."""
 
@@ -147,7 +37,6 @@ class ResponseSchemaSpec(BaseModel):
 
     def to_response_schema(self) -> ResponseProto[str]:
         """Reconstruct a ``RawSchema`` from this spec."""
-        from autogen.beta.response.schema import RawSchema
 
         return RawSchema(
             self.json_schema,
@@ -170,18 +59,16 @@ class AgentSpec(BaseModel):
     name: str
     prompt: list[str] = Field(default_factory=list)
     tool_names: list[str] = Field(default_factory=list)
-    config: ConfigSpec | None = None
     response_schema: ResponseSchemaSpec | None = None
     variables: dict[str, Any] = Field(default_factory=dict)
 
     @classmethod
-    def from_agent(cls, agent: Agent) -> AgentSpec:
+    def from_agent(cls, agent: Agent) -> "AgentSpec":
         """Create an ``AgentSpec`` from a live ``Agent`` instance.
 
         Only serializable state is captured. Dynamic prompts, middleware,
         callbacks, and dependencies are dropped.
         """
-        from autogen.beta.tools.final.function_tool import FunctionTool
 
         # Tool names
         tool_names: list[str] = []
@@ -243,8 +130,6 @@ class AgentSpec(BaseModel):
         response_schema:
             Override the response schema from the spec.
         """
-        from autogen.beta.agent import Agent as AgentCls
-        from autogen.beta.tools.final.function_tool import FunctionTool
 
         # Build name -> tool index from available_tools
         tool_index: dict[str, Tool | Callable[..., Any]] = {}
@@ -268,11 +153,6 @@ class AgentSpec(BaseModel):
         if missing:
             raise ValueError(f"Could not resolve tool(s): {missing}. Available: {sorted(tool_index)}")
 
-        # Config: explicit param > spec > None
-        final_config = config
-        if final_config is None and self.config is not None:
-            final_config = self.config.to_config()
-
         # Response schema: explicit param > spec > None
         final_rs = response_schema
         if final_rs is None and self.response_schema is not None:
@@ -283,10 +163,10 @@ class AgentSpec(BaseModel):
         if variables:
             final_variables.update(variables)
 
-        return AgentCls(
+        return Agent(
             name=self.name,
             prompt=list(self.prompt),
-            config=final_config,
+            config=config,
             tools=resolved_tools,
             middleware=middleware,
             dependencies=dependencies,

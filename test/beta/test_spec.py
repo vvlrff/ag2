@@ -8,7 +8,7 @@ from pydantic import BaseModel
 
 from autogen.beta import AgentSpec
 from autogen.beta.response import ResponseSchema
-from autogen.beta.spec import ConfigSpec, ResponseSchemaSpec
+from autogen.beta.spec import ResponseSchemaSpec
 
 from .conftest import add, greet, make_agent, multiply
 
@@ -158,25 +158,6 @@ def test_from_agent_with_response_schema() -> None:
     assert spec.response_schema is not None
     assert spec.response_schema.name == "Answer"
     assert "value" in str(spec.response_schema.json_schema)
-
-
-def test_to_agent_with_no_config() -> None:
-    spec = AgentSpec(name="no_config")
-    agent = spec.to_agent()
-
-    assert agent.config is None
-
-
-def test_from_agent_does_not_include_config() -> None:
-    agent = make_agent()
-    spec = AgentSpec.from_agent(agent)
-
-    assert spec.config is None
-
-
-def test_config_spec_unknown_provider() -> None:
-    with pytest.raises(ValueError, match="Unknown provider"):
-        ConfigSpec(provider="unknown", model="x").to_config()
 
 
 def test_to_agent_from_json_string() -> None:
