@@ -10,7 +10,7 @@ from autogen.beta import AgentSpec
 from autogen.beta.response import ResponseSchema
 from autogen.beta.spec import ResponseSchemaSpec
 
-from .conftest import add, greet, make_agent, multiply
+from .helpers import add, greet, make_agent, multiply
 
 
 class Answer(BaseModel):

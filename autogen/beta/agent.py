@@ -332,7 +332,7 @@ class Agent(Generic[TResult]):
         self._system_prompt: list[str] = []
         self._dynamic_prompt: list[Callable[[ModelRequest, Context], Awaitable[str]]] = []
 
-        self._response_schema = ResponseSchema.ensure_schema(response_schema)
+        self._response_schema: ResponseProto[TResult] | None = ResponseSchema.ensure_schema(response_schema)
 
         if isinstance(prompt, str) or callable(prompt):
             prompt = [prompt]

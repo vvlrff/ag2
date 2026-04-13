@@ -79,10 +79,10 @@ class AgentSpec(BaseModel):
         # Response schema
         rs_spec: ResponseSchemaSpec | None = None
         rs = agent._response_schema
-        if rs is not None and getattr(rs, "json_schema", None) is not None:
+        if rs is not None and rs.json_schema is not None:
             rs_spec = ResponseSchemaSpec(
                 name=rs.name,
-                description=getattr(rs, "description", None),
+                description=rs.description,
                 json_schema=rs.json_schema,
             )
 
