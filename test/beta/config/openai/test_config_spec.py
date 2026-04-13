@@ -3,22 +3,23 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import httpx
+from dirty_equals import IsPartialDict
 
+from autogen.beta import AgentSpec
 from autogen.beta.config.openai.config import OpenAIConfig
 from autogen.beta.spec import ConfigSpec
+from test.beta.conftest import add, make_agent
 
 
 def test_config_spec_round_trip() -> None:
     config = OpenAIConfig(model="gpt-4o", temperature=0.7, streaming=True)
     cs = ConfigSpec.from_config(config)
 
-    assert cs.provider == "openai"
-    assert cs.model == "gpt-4o"
-    assert cs.params["temperature"] == 0.7
-    assert cs.params["streaming"] is True
+    assert cs.model_dump() == IsPartialDict({"provider": "openai", "model": "gpt-4o"})
+    assert cs.params == IsPartialDict({"temperature": 0.7, "streaming": True})
 
     restored = cs.to_config()
-    assert type(restored).__name__ == "OpenAIConfig"
+    assert isinstance(restored, OpenAIConfig)
     assert restored.model == "gpt-4o"
     assert restored.temperature == 0.7
 
@@ -38,20 +39,13 @@ def test_filters_sentinels() -> None:
 
 
 def test_from_agent_does_not_include_config() -> None:
-    from autogen.beta import AgentSpec
-    from test.beta.conftest import make_agent
-
-    config = OpenAIConfig(model="gpt-4o", temperature=0.5)
-    agent = make_agent(config=config)
+    agent = make_agent(config=OpenAIConfig(model="gpt-4o", temperature=0.5))
     spec = AgentSpec.from_agent(agent)
 
     assert spec.config is None
 
 
 def test_to_agent_with_config_param() -> None:
-    from autogen.beta import AgentSpec
-    from test.beta.conftest import add
-
     spec = AgentSpec(name="test", tool_names=["add"])
     config = OpenAIConfig(model="gpt-4o-mini")
 
@@ -61,21 +55,16 @@ def test_to_agent_with_config_param() -> None:
 
 
 def test_to_agent_with_config_from_spec() -> None:
-    from autogen.beta import AgentSpec
-
     spec = AgentSpec(
         name="test",
         config=ConfigSpec(provider="openai", model="gpt-4o"),
     )
 
     agent = spec.to_agent()
-    assert agent.config is not None
-    assert type(agent.config).__name__ == "OpenAIConfig"
+    assert isinstance(agent.config, OpenAIConfig)
 
 
 def test_config_override_beats_spec() -> None:
-    from autogen.beta import AgentSpec
-
     spec = AgentSpec(
         name="test",
         config=ConfigSpec(provider="openai", model="gpt-4o"),
@@ -88,8 +77,6 @@ def test_config_override_beats_spec() -> None:
 
 
 def test_to_agent_from_json_with_config() -> None:
-    from autogen.beta import AgentSpec
-
     json_str = '{"name": "bot", "tool_names": []}'
     config = OpenAIConfig(model="gpt-4o-mini")
 

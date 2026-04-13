@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import pytest
+from dirty_equals import IsPartialDict
 from pydantic import BaseModel
 
 from autogen.beta import AgentSpec
@@ -21,8 +22,7 @@ def test_from_agent_extracts_name_and_prompt() -> None:
     agent = make_agent(prompt="Be helpful.")
     spec = AgentSpec.from_agent(agent)
 
-    assert spec.name == "test_agent"
-    assert spec.prompt == ["Be helpful."]
+    assert spec.model_dump() == IsPartialDict({"name": "test_agent", "prompt": ["Be helpful."]})
 
 
 def test_from_agent_extracts_tools() -> None:
@@ -49,9 +49,7 @@ def test_to_agent_resolves_tools() -> None:
     agent = spec.to_agent(available_tools=[add, multiply, greet])
 
     assert agent.name == "resolver"
-    assert len(agent.tools) == 2
-    tool_names = [t.schema.function.name for t in agent.tools]
-    assert tool_names == ["add", "greet"]
+    assert [t.schema.function.name for t in agent.tools] == ["add", "greet"]
 
 
 def test_to_agent_missing_tool_raises() -> None:
@@ -75,10 +73,10 @@ def test_round_trip_json() -> None:
     restored_spec = AgentSpec.model_validate_json(json_str)
     assert restored_spec == spec
 
-    restored_agent = restored_spec.to_agent(available_tools=[add, multiply])
-    assert restored_agent.name == "test_agent"
-    assert restored_agent._system_prompt == ["Round trip test."]
-    assert len(restored_agent.tools) == 2
+    restored = restored_spec.to_agent(available_tools=[add, multiply])
+    assert restored.name == "test_agent"
+    assert restored._system_prompt == ["Round trip test."]
+    assert len(restored.tools) == 2
 
 
 def test_manual_spec_creation() -> None:
@@ -100,10 +98,7 @@ def test_manual_spec_creation() -> None:
 def test_agent_to_spec_method() -> None:
     agent = make_agent()
 
-    spec_from_method = agent.to_spec()
-    spec_from_class = AgentSpec.from_agent(agent)
-
-    assert spec_from_method == spec_from_class
+    assert agent.to_spec() == AgentSpec.from_agent(agent)
 
 
 def test_variables_round_trip() -> None:
@@ -120,22 +115,17 @@ def test_non_serializable_variables_skipped() -> None:
     agent = make_agent(
         variables={
             "safe": "value",
-            "unsafe": lambda x: x,  # not JSON-serializable
+            "unsafe": lambda x: x,
             "also_safe": 42,
         }
     )
     spec = AgentSpec.from_agent(agent)
 
-    assert "safe" in spec.variables
-    assert "also_safe" in spec.variables
-    assert "unsafe" not in spec.variables
+    assert spec.variables == {"safe": "value", "also_safe": 42}
 
 
 def test_variables_override_in_to_agent() -> None:
-    spec = AgentSpec(
-        name="test",
-        variables={"a": 1, "b": 2},
-    )
+    spec = AgentSpec(name="test", variables={"a": 1, "b": 2})
 
     agent = spec.to_agent(variables={"b": 99, "c": 3})
 
@@ -153,7 +143,7 @@ def test_response_schema_spec_round_trip() -> None:
     json_data = rs_spec.model_dump_json()
     restored = ResponseSchemaSpec.model_validate_json(json_data)
 
-    assert restored.name == rs_spec.name
+    assert restored.model_dump() == IsPartialDict({"name": rs_spec.name})
     assert restored.json_schema == rs_spec.json_schema
 
     raw = restored.to_response_schema()
@@ -196,8 +186,7 @@ def test_to_agent_from_json_string() -> None:
 
     assert agent.name == "bot"
     assert agent._system_prompt == ["Help."]
-    assert len(agent.tools) == 1
-    assert agent.tools[0].schema.function.name == "add"
+    assert [t.schema.function.name for t in agent.tools] == ["add"]
 
 
 def test_to_agent_from_json_dict() -> None:
@@ -211,8 +200,7 @@ def test_to_agent_from_json_dict() -> None:
     agent = AgentSpec.to_agent_from_json(data, available_tools=[add, multiply, greet])
 
     assert agent.name == "bot"
-    assert len(agent.tools) == 1
-    assert agent.tools[0].schema.function.name == "greet"
+    assert [t.schema.function.name for t in agent.tools] == ["greet"]
     assert agent._agent_variables == {"lang": "en"}
 
 
