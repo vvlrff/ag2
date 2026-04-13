@@ -173,35 +173,3 @@ class AgentSpec(BaseModel):
             variables=final_variables or None,
             response_schema=final_rs,
         )
-
-    @classmethod
-    def to_agent_from_json(
-        cls,
-        json_data: str | dict[str, Any],
-        *,
-        available_tools: Iterable[Tool | Callable[..., Any]] = (),
-        config: ModelConfig | None = None,
-        middleware: Iterable[MiddlewareFactory] = (),
-        dependencies: dict[Any, Any] | None = None,
-        variables: dict[str, Any] | None = None,
-        response_schema: ResponseProto[Any] | type | None = None,
-    ) -> Agent:
-        """Parse JSON into an ``AgentSpec`` and reconstruct an ``Agent`` in one step.
-
-        Parameters
-        ----------
-        json_data:
-            A JSON string or a dict to parse into an ``AgentSpec``.
-        available_tools, config, middleware, dependencies, variables, response_schema:
-            Forwarded to :meth:`to_agent`.
-        """
-        spec = cls.model_validate_json(json_data) if isinstance(json_data, str) else cls.model_validate(json_data)
-
-        return spec.to_agent(
-            available_tools=available_tools,
-            config=config,
-            middleware=middleware,
-            dependencies=dependencies,
-            variables=variables,
-            response_schema=response_schema,
-        )

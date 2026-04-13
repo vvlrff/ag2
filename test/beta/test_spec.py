@@ -160,17 +160,17 @@ def test_from_agent_with_response_schema() -> None:
     assert "value" in str(spec.response_schema.json_schema)
 
 
-def test_to_agent_from_json_string() -> None:
+def test_from_json_string() -> None:
     json_str = '{"name": "bot", "prompt": ["Help."], "tool_names": ["add"]}'
 
-    agent = AgentSpec.to_agent_from_json(json_str, available_tools=[add, multiply])
+    agent = AgentSpec.model_validate_json(json_str).to_agent(available_tools=[add, multiply])
 
     assert agent.name == "bot"
     assert agent._system_prompt == ["Help."]
     assert [t.schema.function.name for t in agent.tools] == ["add"]
 
 
-def test_to_agent_from_json_dict() -> None:
+def test_from_dict() -> None:
     data = {
         "name": "bot",
         "prompt": ["Help."],
@@ -178,25 +178,25 @@ def test_to_agent_from_json_dict() -> None:
         "variables": {"lang": "en"},
     }
 
-    agent = AgentSpec.to_agent_from_json(data, available_tools=[add, multiply, greet])
+    agent = AgentSpec(**data).to_agent(available_tools=[add, multiply, greet])
 
     assert agent.name == "bot"
     assert [t.schema.function.name for t in agent.tools] == ["greet"]
     assert agent._agent_variables == {"lang": "en"}
 
 
-def test_to_agent_from_json_missing_tool_raises() -> None:
+def test_from_json_missing_tool_raises() -> None:
     json_str = '{"name": "bot", "tool_names": ["nonexistent"]}'
 
     with pytest.raises(ValueError, match="nonexistent"):
-        AgentSpec.to_agent_from_json(json_str, available_tools=[add])
+        AgentSpec.model_validate_json(json_str).to_agent(available_tools=[add])
 
 
-def test_to_agent_from_json_round_trip() -> None:
+def test_json_round_trip() -> None:
     agent = make_agent(variables={"x": 1})
     json_str = agent.to_spec().model_dump_json()
 
-    restored = AgentSpec.to_agent_from_json(json_str, available_tools=[add, multiply])
+    restored = AgentSpec.model_validate_json(json_str).to_agent(available_tools=[add, multiply])
 
     assert restored.name == agent.name
     assert restored._system_prompt == agent._system_prompt
