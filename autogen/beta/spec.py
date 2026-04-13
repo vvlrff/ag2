@@ -189,11 +189,6 @@ class AgentSpec(BaseModel):
             if isinstance(t, FunctionTool):
                 tool_names.append(t.schema.function.name)
 
-        # Config
-        config_spec: ConfigSpec | None = None
-        if agent.config is not None:
-            config_spec = ConfigSpec.from_config(agent.config)
-
         # Response schema
         rs_spec: ResponseSchemaSpec | None = None
         rs = agent._response_schema
@@ -214,7 +209,6 @@ class AgentSpec(BaseModel):
             name=agent.name,
             prompt=list(agent._system_prompt),
             tool_names=tool_names,
-            config=config_spec,
             response_schema=rs_spec,
             variables=variables,
         )

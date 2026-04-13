@@ -2,10 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import httpx
 import pytest
 from pydantic import BaseModel
 
 from autogen.beta import AgentSpec
+from autogen.beta.config.anthropic.config import AnthropicConfig
+from autogen.beta.config.gemini.config import GeminiConfig
+from autogen.beta.config.openai.config import OpenAIConfig
 from autogen.beta.response import ResponseSchema
 from autogen.beta.spec import ConfigSpec, ResponseSchemaSpec
 
@@ -178,8 +182,6 @@ def test_to_agent_with_no_config() -> None:
 
 
 def test_config_spec_openai() -> None:
-    from autogen.beta.config.openai.config import OpenAIConfig
-
     config = OpenAIConfig(model="gpt-4o", temperature=0.7, streaming=True)
     cs = ConfigSpec.from_config(config)
 
@@ -195,8 +197,6 @@ def test_config_spec_openai() -> None:
 
 
 def test_config_spec_anthropic() -> None:
-    from autogen.beta.config.anthropic.config import AnthropicConfig
-
     config = AnthropicConfig(model="claude-sonnet-4-20250514", temperature=0.5, max_tokens=1024)
     cs = ConfigSpec.from_config(config)
 
@@ -211,8 +211,6 @@ def test_config_spec_anthropic() -> None:
 
 
 def test_config_spec_gemini() -> None:
-    from autogen.beta.config.gemini.config import GeminiConfig
-
     config = GeminiConfig(model="gemini-2.0-flash", temperature=0.3)
     cs = ConfigSpec.from_config(config)
 
@@ -225,10 +223,6 @@ def test_config_spec_gemini() -> None:
 
 
 def test_config_spec_filters_http_client() -> None:
-    import httpx
-
-    from autogen.beta.config.openai.config import OpenAIConfig
-
     config = OpenAIConfig(model="gpt-4o", http_client=httpx.AsyncClient())
     cs = ConfigSpec.from_config(config)
 
@@ -236,8 +230,6 @@ def test_config_spec_filters_http_client() -> None:
 
 
 def test_config_spec_filters_sentinels() -> None:
-    from autogen.beta.config.openai.config import OpenAIConfig
-
     config = OpenAIConfig(model="gpt-4o")
     cs = ConfigSpec.from_config(config)
 
@@ -250,30 +242,44 @@ def test_config_spec_unknown_provider() -> None:
         ConfigSpec(provider="unknown", model="x").to_config()
 
 
-def test_spec_to_agent_with_config() -> None:
-    from autogen.beta.config.openai.config import OpenAIConfig
-
+def test_from_agent_does_not_include_config() -> None:
     config = OpenAIConfig(model="gpt-4o", temperature=0.5)
     agent = make_agent(config=config)
     spec = AgentSpec.from_agent(agent)
 
-    restored = spec.to_agent(available_tools=[add, multiply])
-    assert restored.config is not None
-    assert restored.config.model == "gpt-4o"  # type: ignore[attr-defined]
+    assert spec.config is None
 
 
-def test_config_override_in_to_agent() -> None:
-    from autogen.beta.config.openai.config import OpenAIConfig
+def test_to_agent_with_config_param() -> None:
+    spec = AgentSpec(name="test", tool_names=["add"])
+    config = OpenAIConfig(model="gpt-4o-mini")
 
+    agent = spec.to_agent(available_tools=[add], config=config)
+
+    assert agent.config is config
+
+
+def test_to_agent_with_config_from_spec() -> None:
     spec = AgentSpec(
         name="test",
         config=ConfigSpec(provider="openai", model="gpt-4o"),
     )
 
-    override_config = OpenAIConfig(model="gpt-4o-mini")
-    agent = spec.to_agent(config=override_config)
+    agent = spec.to_agent()
+    assert agent.config is not None
+    assert type(agent.config).__name__ == "OpenAIConfig"
 
-    assert agent.config is override_config
+
+def test_config_override_beats_spec() -> None:
+    spec = AgentSpec(
+        name="test",
+        config=ConfigSpec(provider="openai", model="gpt-4o"),
+    )
+
+    override = OpenAIConfig(model="gpt-4o-mini")
+    agent = spec.to_agent(config=override)
+
+    assert agent.config is override
 
 
 def test_to_agent_from_json_string() -> None:
@@ -304,8 +310,6 @@ def test_to_agent_from_json_dict() -> None:
 
 
 def test_to_agent_from_json_with_config_override() -> None:
-    from autogen.beta.config.openai.config import OpenAIConfig
-
     json_str = '{"name": "bot", "tool_names": []}'
     config = OpenAIConfig(model="gpt-4o-mini")
 
