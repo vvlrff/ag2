@@ -6,12 +6,12 @@ from contextlib import ExitStack
 
 import pytest
 
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext
 from autogen.beta.tools.builtin.skills import Skill, SkillsTool, SkillsToolSchema
 
 
 @pytest.mark.asyncio
-async def test_strings_become_skill_objects(context: Context) -> None:
+async def test_strings_become_skill_objects(context: ConversationContext) -> None:
     t = SkillsTool("pptx", "xlsx")
 
     [schema] = await t.schemas(context)
@@ -22,7 +22,7 @@ async def test_strings_become_skill_objects(context: Context) -> None:
 
 
 @pytest.mark.asyncio
-async def test_skill_objects_preserved(context: Context) -> None:
+async def test_skill_objects_preserved(context: ConversationContext) -> None:
     t = SkillsTool(Skill("openai-spreadsheets"), Skill("skill_abc123", version=2))
 
     [schema] = await t.schemas(context)
@@ -34,7 +34,7 @@ async def test_skill_objects_preserved(context: Context) -> None:
 
 
 @pytest.mark.asyncio
-async def test_mixed_strings_and_skill_objects(context: Context) -> None:
+async def test_mixed_strings_and_skill_objects(context: ConversationContext) -> None:
     t = SkillsTool("pptx", Skill("xlsx", version="20251013"))
 
     [schema] = await t.schemas(context)
@@ -46,7 +46,7 @@ async def test_mixed_strings_and_skill_objects(context: Context) -> None:
 
 
 @pytest.mark.asyncio
-async def test_no_args_produces_empty_skills(context: Context) -> None:
+async def test_no_args_produces_empty_skills(context: ConversationContext) -> None:
     t = SkillsTool()
 
     [schema] = await t.schemas(context)
@@ -55,7 +55,7 @@ async def test_no_args_produces_empty_skills(context: Context) -> None:
 
 
 @pytest.mark.asyncio
-async def test_register_is_noop(context: Context) -> None:
+async def test_register_is_noop(context: ConversationContext) -> None:
     t = SkillsTool("pptx")
 
     with ExitStack() as stack:

@@ -5,13 +5,13 @@
 import pytest
 
 from autogen.beta.config.anthropic.mappers import extract_skills_for_container, tool_to_api
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext
 from autogen.beta.exceptions import UnsupportedToolError
 from autogen.beta.tools.builtin.skills import Skill, SkillsTool
 
 
 @pytest.mark.asyncio
-async def test_extract_skills_strings(context: Context) -> None:
+async def test_extract_skills_strings(context: ConversationContext) -> None:
     t = SkillsTool("pptx", "xlsx")
     [schema] = await t.schemas(context)
 
@@ -24,7 +24,7 @@ async def test_extract_skills_strings(context: Context) -> None:
 
 
 @pytest.mark.asyncio
-async def test_extract_skills_with_version(context: Context) -> None:
+async def test_extract_skills_with_version(context: ConversationContext) -> None:
     t = SkillsTool(Skill("pptx", version="20251013"), Skill("xlsx", version="latest"))
     [schema] = await t.schemas(context)
 
@@ -37,14 +37,14 @@ async def test_extract_skills_with_version(context: Context) -> None:
 
 
 @pytest.mark.asyncio
-async def test_extract_skills_empty_list(context: Context) -> None:
+async def test_extract_skills_empty_list(context: ConversationContext) -> None:
     result = extract_skills_for_container([])
 
     assert result == []
 
 
 @pytest.mark.asyncio
-async def test_extract_skills_no_skills_schema(context: Context) -> None:
+async def test_extract_skills_no_skills_schema(context: ConversationContext) -> None:
     from autogen.beta.tools.builtin.web_search import WebSearchTool
 
     ws = WebSearchTool()
@@ -56,7 +56,7 @@ async def test_extract_skills_no_skills_schema(context: Context) -> None:
 
 
 @pytest.mark.asyncio
-async def test_tool_to_api_raises_for_skills_schema(context: Context) -> None:
+async def test_tool_to_api_raises_for_skills_schema(context: ConversationContext) -> None:
     """SkillsToolSchema must NOT be passed to tool_to_api — use extract_skills_for_container."""
     t = SkillsTool("pptx")
     [schema] = await t.schemas(context)

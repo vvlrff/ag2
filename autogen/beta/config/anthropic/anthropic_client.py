@@ -17,7 +17,7 @@ from anthropic.types import (
 )
 
 from autogen.beta.config.client import LLMClient
-from autogen.beta.context import Context
+from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
     BaseEvent,
     ModelMessage,
@@ -82,7 +82,7 @@ class AnthropicClient(LLMClient):
     async def __call__(
         self,
         messages: Sequence[BaseEvent],
-        context: Context,
+        context: "ConversationContext",
         *,
         tools: Iterable[ToolSchema],
         response_schema: ResponseProto | None,
@@ -189,7 +189,7 @@ class AnthropicClient(LLMClient):
     async def _process_response(
         self,
         response: Message,
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         text_parts: list[str] = []
         calls: list[ToolCallEvent] = []
@@ -230,7 +230,7 @@ class AnthropicClient(LLMClient):
     async def _process_stream(
         self,
         stream: Any,
-        context: Context,
+        context: "ConversationContext",
     ) -> ModelResponse:
         full_content: str = ""
         calls: list[ToolCallEvent] = []
