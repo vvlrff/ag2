@@ -321,10 +321,7 @@ class AgentSpec(BaseModel):
         available_tools, config, middleware, dependencies, variables, response_schema:
             Forwarded to :meth:`to_agent`.
         """
-        if isinstance(json_data, str):
-            spec = cls.model_validate_json(json_data)
-        else:
-            spec = cls.model_validate(json_data)
+        spec = cls.model_validate_json(json_data) if isinstance(json_data, str) else cls.model_validate(json_data)
 
         return spec.to_agent(
             available_tools=available_tools,
