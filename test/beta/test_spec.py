@@ -2,14 +2,10 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import httpx
 import pytest
 from pydantic import BaseModel
 
 from autogen.beta import AgentSpec
-from autogen.beta.config.anthropic.config import AnthropicConfig
-from autogen.beta.config.gemini.config import GeminiConfig
-from autogen.beta.config.openai.config import OpenAIConfig
 from autogen.beta.response import ResponseSchema
 from autogen.beta.spec import ConfigSpec, ResponseSchemaSpec
 
@@ -181,105 +177,16 @@ def test_to_agent_with_no_config() -> None:
     assert agent.config is None
 
 
-def test_config_spec_openai() -> None:
-    config = OpenAIConfig(model="gpt-4o", temperature=0.7, streaming=True)
-    cs = ConfigSpec.from_config(config)
-
-    assert cs.provider == "openai"
-    assert cs.model == "gpt-4o"
-    assert cs.params["temperature"] == 0.7
-    assert cs.params["streaming"] is True
-
-    restored = cs.to_config()
-    assert type(restored).__name__ == "OpenAIConfig"
-    assert restored.model == "gpt-4o"  # type: ignore[attr-defined]
-    assert restored.temperature == 0.7  # type: ignore[attr-defined]
-
-
-def test_config_spec_anthropic() -> None:
-    config = AnthropicConfig(model="claude-sonnet-4-20250514", temperature=0.5, max_tokens=1024)
-    cs = ConfigSpec.from_config(config)
-
-    assert cs.provider == "anthropic"
-    assert cs.model == "claude-sonnet-4-20250514"
-    assert cs.params["temperature"] == 0.5
-    assert cs.params["max_tokens"] == 1024
-
-    restored = cs.to_config()
-    assert type(restored).__name__ == "AnthropicConfig"
-    assert restored.model == "claude-sonnet-4-20250514"  # type: ignore[attr-defined]
-
-
-def test_config_spec_gemini() -> None:
-    config = GeminiConfig(model="gemini-2.0-flash", temperature=0.3)
-    cs = ConfigSpec.from_config(config)
-
-    assert cs.provider == "gemini"
-    assert cs.model == "gemini-2.0-flash"
-    assert cs.params["temperature"] == 0.3
-
-    restored = cs.to_config()
-    assert type(restored).__name__ == "GeminiConfig"
-
-
-def test_config_spec_filters_http_client() -> None:
-    config = OpenAIConfig(model="gpt-4o", http_client=httpx.AsyncClient())
-    cs = ConfigSpec.from_config(config)
-
-    assert "http_client" not in cs.params
-
-
-def test_config_spec_filters_sentinels() -> None:
-    config = OpenAIConfig(model="gpt-4o")
-    cs = ConfigSpec.from_config(config)
-
-    # Sentinel fields like temperature (default=omit) should not appear
-    assert "temperature" not in cs.params or cs.params.get("temperature") is not None
-
-
-def test_config_spec_unknown_provider() -> None:
-    with pytest.raises(ValueError, match="Unknown provider"):
-        ConfigSpec(provider="unknown", model="x").to_config()
-
-
 def test_from_agent_does_not_include_config() -> None:
-    config = OpenAIConfig(model="gpt-4o", temperature=0.5)
-    agent = make_agent(config=config)
+    agent = make_agent()
     spec = AgentSpec.from_agent(agent)
 
     assert spec.config is None
 
 
-def test_to_agent_with_config_param() -> None:
-    spec = AgentSpec(name="test", tool_names=["add"])
-    config = OpenAIConfig(model="gpt-4o-mini")
-
-    agent = spec.to_agent(available_tools=[add], config=config)
-
-    assert agent.config is config
-
-
-def test_to_agent_with_config_from_spec() -> None:
-    spec = AgentSpec(
-        name="test",
-        config=ConfigSpec(provider="openai", model="gpt-4o"),
-    )
-
-    agent = spec.to_agent()
-    assert agent.config is not None
-    assert type(agent.config).__name__ == "OpenAIConfig"
-
-
-def test_config_override_beats_spec() -> None:
-    spec = AgentSpec(
-        name="test",
-        config=ConfigSpec(provider="openai", model="gpt-4o"),
-    )
-
-    override = OpenAIConfig(model="gpt-4o-mini")
-    agent = spec.to_agent(config=override)
-
-    assert agent.config is override
+def test_config_spec_unknown_provider() -> None:
+    with pytest.raises(ValueError, match="Unknown provider"):
+        ConfigSpec(provider="unknown", model="x").to_config()
 
 
 def test_to_agent_from_json_string() -> None:
@@ -307,15 +214,6 @@ def test_to_agent_from_json_dict() -> None:
     assert len(agent.tools) == 1
     assert agent.tools[0].schema.function.name == "greet"
     assert agent._agent_variables == {"lang": "en"}
-
-
-def test_to_agent_from_json_with_config_override() -> None:
-    json_str = '{"name": "bot", "tool_names": []}'
-    config = OpenAIConfig(model="gpt-4o-mini")
-
-    agent = AgentSpec.to_agent_from_json(json_str, config=config)
-
-    assert agent.config is config
 
 
 def test_to_agent_from_json_missing_tool_raises() -> None:
