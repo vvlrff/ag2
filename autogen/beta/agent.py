@@ -46,6 +46,7 @@ from .utils import CONTEXT_OPTION_NAME, build_model
 
 if TYPE_CHECKING:
     from .conversable import ConversableAdapter
+    from .spec import AgentSpec
     from .tools.subagents import StreamFactory
 
 
@@ -718,6 +719,12 @@ class Agent(Generic[TResult]):
             stream=stream,
             middleware=middleware,
         )
+
+    def to_spec(self) -> "AgentSpec":
+        """Serialize this agent to a JSON-safe :class:`AgentSpec`."""
+        from .spec import AgentSpec
+
+        return AgentSpec.from_agent(self)
 
     def as_conversable(self) -> "ConversableAdapter":
         from .conversable import ConversableAdapter
