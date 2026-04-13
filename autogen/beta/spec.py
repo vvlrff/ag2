@@ -174,8 +174,6 @@ class AgentSpec(BaseModel):
     response_schema: ResponseSchemaSpec | None = None
     variables: dict[str, Any] = Field(default_factory=dict)
 
-    # -- From agent ----------------------------------------------------------
-
     @classmethod
     def from_agent(cls, agent: Agent) -> AgentSpec:
         """Create an ``AgentSpec`` from a live ``Agent`` instance.
