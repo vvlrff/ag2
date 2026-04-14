@@ -12,12 +12,14 @@ from autogen.beta.middleware import BaseMiddleware
 from autogen.beta.tools.schemas import ToolSchema
 from autogen.beta.tools.tool import Tool
 
+CODE_EXECUTION_TOOL_NAME = "code_execution"
+
 
 @dataclass(slots=True)
 class CodeExecutionToolSchema(ToolSchema):
     """Provider-neutral capability flag for code execution."""
 
-    type: str = field(default="code_execution", init=False)
+    type: str = field(default=CODE_EXECUTION_TOOL_NAME, init=False)
     version: Literal["code_execution_20250825"] = "code_execution_20250825"
 
 
@@ -27,6 +29,8 @@ class CodeExecutionTool(Tool):
     Each LLM client's mapper is responsible for converting this schema
     into the correct provider-specific API format.
     """
+
+    tool_type = CODE_EXECUTION_TOOL_NAME
 
     def __init__(
         self,

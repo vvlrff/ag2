@@ -14,10 +14,12 @@ from autogen.beta.tools.tool import Tool
 
 from ._resolve import resolve_variable
 
+WEB_FETCH_TOOL_NAME = "web_fetch"
+
 
 @dataclass(slots=True)
 class WebFetchToolSchema(ToolSchema):
-    type: str = field(default="web_fetch", init=False)
+    type: str = field(default=WEB_FETCH_TOOL_NAME, init=False)
     max_uses: int | None = None
     allowed_domains: list[str] | None = None
     blocked_domains: list[str] | None = None
@@ -28,6 +30,7 @@ class WebFetchToolSchema(ToolSchema):
 
 class WebFetchTool(Tool):
     __slots__ = ("_params",)
+    tool_type = WEB_FETCH_TOOL_NAME
 
     def __init__(
         self,

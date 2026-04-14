@@ -43,6 +43,9 @@ class ContainerReferenceEnvironment:
 ShellEnvironment = ContainerAutoEnvironment | ContainerReferenceEnvironment
 
 
+SHELL_TOOL_NAME = "shell"
+
+
 @dataclass(slots=True)
 class ShellToolSchema(ToolSchema):
     """Provider-neutral capability flag for shell/bash execution.
@@ -53,7 +56,7 @@ class ShellToolSchema(ToolSchema):
     - OpenAI Responses API: ``shell`` (with optional ``environment``)
     """
 
-    type: str = field(default="shell", init=False)
+    type: str = field(default=SHELL_TOOL_NAME, init=False)
     version: Literal["bash_20250124"] = "bash_20250124"
     environment: ShellEnvironment | None = None
 
@@ -78,6 +81,7 @@ class ShellTool(Tool):
     """
 
     __slots__ = ("_params",)
+    tool_type = SHELL_TOOL_NAME
 
     def __init__(
         self,

@@ -18,6 +18,15 @@ class ToolNotFoundError(ToolExecutionError):
         super().__init__(f"Tool `{name}` not found")
 
 
+class ToolResolutionError(ToolExecutionError):
+    """Raised when one or more tools in an AgentSpec cannot be resolved from the available tools pool."""
+
+    def __init__(self, missing: list[str], available: list[str]) -> None:
+        self.missing = missing
+        self.available = available
+        super().__init__(f"Could not resolve tool(s): {missing}. Available: {sorted(available)}")
+
+
 class UnsupportedToolError(ToolExecutionError):
     """Raised when a tool type is not supported by a provider."""
 

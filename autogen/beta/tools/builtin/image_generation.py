@@ -49,6 +49,7 @@ class ImageGenerationTool(Tool):
     """
 
     __slots__ = "_params"
+    tool_type = IMAGE_GENERATION_TOOL_NAME
 
     def __init__(
         self,

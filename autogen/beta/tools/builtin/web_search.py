@@ -39,6 +39,7 @@ class WebSearchToolSchema(ToolSchema):
 
 class WebSearchTool(Tool):
     __slots__ = ("_params",)
+    tool_type = WEB_SEARCH_TOOL_NAME
 
     def __init__(
         self,

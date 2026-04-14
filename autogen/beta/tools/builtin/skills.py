@@ -25,6 +25,9 @@ class Skill:
     version: str | None = None
 
 
+SKILLS_TOOL_NAME = "skills"
+
+
 @dataclass(slots=True)
 class SkillsToolSchema(ToolSchema):
     """Provider-neutral capability flag for provider-side skills.
@@ -34,7 +37,7 @@ class SkillsToolSchema(ToolSchema):
     They never appear in the ``tools[]`` array of a request.
     """
 
-    type: str = field(default="skills", init=False)
+    type: str = field(default=SKILLS_TOOL_NAME, init=False)
     skills: list[Skill] = field(default_factory=list)
 
 
@@ -54,6 +57,7 @@ class SkillsTool(Tool):
     """
 
     __slots__ = ("_skills",)
+    tool_type = SKILLS_TOOL_NAME
 
     def __init__(self, *skills: str | Skill) -> None:
         self._skills: list[Skill] = [s if isinstance(s, Skill) else Skill(id=s) for s in skills]

@@ -7,8 +7,10 @@ from dirty_equals import IsPartialDict
 from pydantic import BaseModel
 
 from autogen.beta import AgentSpec
+from autogen.beta.exceptions import ToolResolutionError
 from autogen.beta.response import ResponseSchema
 from autogen.beta.spec import ResponseSchemaSpec
+from autogen.beta.tools import WebSearchTool
 
 from .helpers import add, greet, make_agent, multiply
 
@@ -58,15 +60,12 @@ def test_to_agent_missing_tool_raises() -> None:
         tool_names=["add", "nonexistent"],
     )
 
-    with pytest.raises(ValueError, match="nonexistent"):
+    with pytest.raises(ToolResolutionError, match="nonexistent"):
         spec.to_agent(available_tools=[add, multiply])
 
 
 def test_round_trip_json() -> None:
-    agent = make_agent(
-        prompt="Round trip test.",
-        variables={"lang": "en", "count": 42},
-    )
+    agent = make_agent(prompt="Round trip test.")
     spec = AgentSpec.from_agent(agent)
     json_str = spec.model_dump_json()
 
@@ -84,7 +83,6 @@ def test_manual_spec_creation() -> None:
         name="research_bot",
         prompt=["You are a researcher.", "Be thorough."],
         tool_names=["add"],
-        variables={"max_results": 10},
     )
 
     agent = spec.to_agent(available_tools=[add, multiply])
@@ -92,44 +90,12 @@ def test_manual_spec_creation() -> None:
     assert agent.name == "research_bot"
     assert agent._system_prompt == ["You are a researcher.", "Be thorough."]
     assert len(agent.tools) == 1
-    assert agent._agent_variables == {"max_results": 10}
 
 
 def test_agent_to_spec_method() -> None:
     agent = make_agent()
 
     assert agent.to_spec() == AgentSpec.from_agent(agent)
-
-
-def test_variables_round_trip() -> None:
-    agent = make_agent(variables={"key": "value", "num": 123, "flag": True})
-    spec = AgentSpec.from_agent(agent)
-
-    assert spec.variables == {"key": "value", "num": 123, "flag": True}
-
-    restored = spec.to_agent(available_tools=[add, multiply])
-    assert restored._agent_variables == {"key": "value", "num": 123, "flag": True}
-
-
-def test_non_serializable_variables_skipped() -> None:
-    agent = make_agent(
-        variables={
-            "safe": "value",
-            "unsafe": lambda x: x,
-            "also_safe": 42,
-        }
-    )
-    spec = AgentSpec.from_agent(agent)
-
-    assert spec.variables == {"safe": "value", "also_safe": 42}
-
-
-def test_variables_override_in_to_agent() -> None:
-    spec = AgentSpec(name="test", variables={"a": 1, "b": 2})
-
-    agent = spec.to_agent(variables={"b": 99, "c": 3})
-
-    assert agent._agent_variables == {"a": 1, "b": 99, "c": 3}
 
 
 def test_response_schema_spec_round_trip() -> None:
@@ -175,30 +141,82 @@ def test_from_dict() -> None:
         "name": "bot",
         "prompt": ["Help."],
         "tool_names": ["greet"],
-        "variables": {"lang": "en"},
     }
 
     agent = AgentSpec(**data).to_agent(available_tools=[add, multiply, greet])
 
     assert agent.name == "bot"
     assert [t.schema.function.name for t in agent.tools] == ["greet"]
-    assert agent._agent_variables == {"lang": "en"}
 
 
 def test_from_json_missing_tool_raises() -> None:
     json_str = '{"name": "bot", "tool_names": ["nonexistent"]}'
 
-    with pytest.raises(ValueError, match="nonexistent"):
+    with pytest.raises(ToolResolutionError, match="nonexistent"):
         AgentSpec.model_validate_json(json_str).to_agent(available_tools=[add])
 
 
 def test_json_round_trip() -> None:
-    agent = make_agent(variables={"x": 1})
-    json_str = agent.to_spec().model_dump_json()
+    agent = make_agent()
+    spec = agent.to_spec()
+    json_str = spec.model_dump_json()
 
     restored = AgentSpec.model_validate_json(json_str).to_agent(available_tools=[add, multiply])
 
     assert restored.name == agent.name
     assert restored._system_prompt == agent._system_prompt
     assert len(restored.tools) == len(agent.tools)
-    assert restored._agent_variables == {"x": 1}
+
+
+def test_builtin_tool_serialization() -> None:
+    ws = WebSearchTool()
+    agent = make_agent(tools=[add, ws])
+    spec = AgentSpec.from_agent(agent)
+
+    assert spec.tool_names == ["add", "web_search"]
+
+
+def test_builtin_tool_resolution() -> None:
+    ws = WebSearchTool()
+    spec = AgentSpec(
+        name="bot",
+        tool_names=["add", "web_search"],
+    )
+
+    agent = spec.to_agent(available_tools=[add, ws])
+
+    assert len(agent.tools) == 2
+
+
+def test_missing_builtin_tool_raises() -> None:
+    spec = AgentSpec(
+        name="bot",
+        tool_names=["web_search"],
+    )
+
+    with pytest.raises(ToolResolutionError, match="web_search"):
+        spec.to_agent(available_tools=[add])
+
+
+def test_to_agent_passes_hitl_hook() -> None:
+    spec = AgentSpec(name="bot")
+
+    def my_hook(msg: str) -> str:
+        return msg
+
+    agent = spec.to_agent(hitl_hook=my_hook)
+    assert agent._hitl_hook is not None
+
+
+def test_to_agent_passes_variables() -> None:
+    spec = AgentSpec(name="bot")
+
+    agent = spec.to_agent(variables={"key": "value"})
+    assert agent._agent_variables == {"key": "value"}
+
+
+def test_to_agent_passes_dependencies() -> None:
+    spec = AgentSpec(name="bot")
+
+    agent = spec.to_agent(dependencies={"db": "mock"})
+    assert agent._agent_dependencies == {"db": "mock"}
