@@ -15,7 +15,6 @@ from autogen.beta.middleware.base import MiddlewareFactory
 from autogen.beta.observer import Observer
 from autogen.beta.response.proto import ResponseProto
 from autogen.beta.response.schema import RawSchema
-from autogen.beta.tools.final.function_tool import FunctionTool
 from autogen.beta.tools.tool import Tool
 
 __all__ = ("AgentSpec", "ResponseSchemaSpec")
@@ -62,14 +61,7 @@ class AgentSpec(BaseModel):
         callbacks, and dependencies are dropped.
         """
 
-        tool_names: list[str] = []
-        for t in agent.tools:
-            if isinstance(t, FunctionTool):
-                tool_names.append(t.schema.function.name)
-            else:
-                type_name = getattr(t, "tool_type", None)
-                if type_name:
-                    tool_names.append(type_name)
+        tool_names: list[str] = [t.name for t in agent.tools]
 
         # Response schema
         rs_spec: ResponseSchemaSpec | None = None
@@ -106,12 +98,8 @@ class AgentSpec(BaseModel):
         # Build name -> tool index from available_tools
         tool_index: dict[str, Tool | Callable[..., Any]] = {}
         for t in available_tools:
-            if isinstance(t, FunctionTool):
-                tool_index[t.schema.function.name] = t
-            elif isinstance(t, Tool):
-                type_name = getattr(t, "tool_type", None)
-                if type_name:
-                    tool_index[type_name] = t
+            if isinstance(t, Tool):
+                tool_index[t.name] = t
             elif callable(t):
                 name = getattr(t, "__name__", None)
                 if name is not None:

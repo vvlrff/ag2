@@ -14,6 +14,8 @@ from .schemas import ToolSchema
 
 @runtime_checkable
 class Tool(Protocol):
+    name: str
+
     async def schemas(self, context: "Context") -> Iterable[ToolSchema]: ...
 
     def register(

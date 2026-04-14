@@ -59,6 +59,7 @@ class LocalShellTool(Tool):
             description=f"Execute a shell command in the working directory: {env.workdir}",
         )
         self._workdir = env.workdir
+        self.name = self._tool.name
 
     @property
     def workdir(self) -> Path:

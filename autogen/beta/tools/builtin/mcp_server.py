@@ -30,7 +30,7 @@ class MCPServerToolSchema(ToolSchema):
 
 class MCPServerTool(Tool):
     __slots__ = ("_params",)
-    tool_type = MCP_SERVER_TOOL_NAME
+    name = MCP_SERVER_TOOL_NAME
 
     def __init__(
         self,

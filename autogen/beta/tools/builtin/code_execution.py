@@ -30,7 +30,7 @@ class CodeExecutionTool(Tool):
     into the correct provider-specific API format.
     """
 
-    tool_type = CODE_EXECUTION_TOOL_NAME
+    name = CODE_EXECUTION_TOOL_NAME
 
     def __init__(
         self,

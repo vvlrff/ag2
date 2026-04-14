@@ -81,7 +81,7 @@ class ShellTool(Tool):
     """
 
     __slots__ = ("_params",)
-    tool_type = SHELL_TOOL_NAME
+    name = SHELL_TOOL_NAME
 
     def __init__(
         self,

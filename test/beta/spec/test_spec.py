@@ -6,11 +6,12 @@ import pytest
 from dirty_equals import IsPartialDict
 from pydantic import BaseModel
 
-from autogen.beta import AgentSpec
+from autogen.beta import Agent, AgentSpec
 from autogen.beta.exceptions import ToolResolutionError
 from autogen.beta.response import ResponseSchema
 from autogen.beta.spec import ResponseSchemaSpec
-from autogen.beta.tools import WebSearchTool
+from autogen.beta.tools import FilesystemToolkit, WebSearchTool
+from autogen.beta.tools.shell import LocalShellTool
 
 from .helpers import add, greet, make_agent, multiply
 
@@ -220,3 +221,54 @@ def test_to_agent_passes_dependencies() -> None:
 
     agent = spec.to_agent(dependencies={"db": "mock"})
     assert agent._agent_dependencies == {"db": "mock"}
+
+
+def test_function_tool_has_name() -> None:
+    assert greet.name == "greet"
+
+
+def test_builtin_tool_has_name() -> None:
+    assert WebSearchTool().name == "web_search"
+
+
+def test_local_shell_tool_has_name() -> None:
+    sh = LocalShellTool()
+    assert sh.name == "shell"
+
+
+def test_toolkit_flattened_on_add() -> None:
+    fs = FilesystemToolkit(base_path="/tmp", read_only=True)
+    agent = Agent(name="bot", tools=[add, fs])
+
+    names = [t.name for t in agent.tools]
+    assert "add" in names
+    assert "read_file" in names
+    assert "find_files" in names
+
+
+def test_toolkit_round_trip() -> None:
+    fs = FilesystemToolkit(base_path="/tmp", read_only=True)
+    agent = Agent(name="bot", tools=[add, fs])
+    spec = AgentSpec.from_agent(agent)
+
+    assert "add" in spec.tool_names
+    assert "read_file" in spec.tool_names
+    assert "find_files" in spec.tool_names
+
+    restored = spec.to_agent(available_tools=[add, *fs.tools])
+    assert [t.name for t in restored.tools] == [t.name for t in agent.tools]
+
+
+def test_tools_dict_pattern() -> None:
+    ws = WebSearchTool()
+    fs = FilesystemToolkit(base_path="/tmp", read_only=True)
+
+    tools_dict = {t.name: t for t in [add, multiply, ws, *fs.tools]}
+    spec = AgentSpec(
+        name="bot",
+        tool_names=["add", "web_search", "read_file"],
+    )
+
+    agent = spec.to_agent(available_tools=tools_dict.values())
+
+    assert [t.name for t in agent.tools] == ["add", "web_search", "read_file"]

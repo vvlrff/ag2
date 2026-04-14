@@ -35,7 +35,7 @@ class MemoryTool(Tool):
     See: https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool
     """
 
-    tool_type = MEMORY_TOOL_NAME
+    name = MEMORY_TOOL_NAME
 
     def __init__(
         self,

@@ -30,7 +30,7 @@ class WebFetchToolSchema(ToolSchema):
 
 class WebFetchTool(Tool):
     __slots__ = ("_params",)
-    tool_type = WEB_FETCH_TOOL_NAME
+    name = WEB_FETCH_TOOL_NAME
 
     def __init__(
         self,

@@ -65,6 +65,7 @@ class FunctionTool(Tool):
         )
 
         self.provider: Provider | None = None
+        self.name = name
 
     def with_middleware(self, *middleware: ToolMiddleware) -> "FunctionTool":
         """Return a new FunctionTool with additional middleware appended.

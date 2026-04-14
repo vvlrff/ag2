@@ -57,7 +57,7 @@ class SkillsTool(Tool):
     """
 
     __slots__ = ("_skills",)
-    tool_type = SKILLS_TOOL_NAME
+    name = SKILLS_TOOL_NAME
 
     def __init__(self, *skills: str | Skill) -> None:
         self._skills: list[Skill] = [s if isinstance(s, Skill) else Skill(id=s) for s in skills]
