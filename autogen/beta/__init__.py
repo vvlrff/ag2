@@ -10,12 +10,14 @@ from .events import AudioInput, BinaryInput, DocumentInput, ImageInput, TextInpu
 from .files import FileContent, FilesAPI, UploadedFile
 from .observer import observer
 from .response import PromptedSchema, ResponseSchema, response_schema
+from .spec import AgentSpec
 from .stream import MemoryStream
-from .tools import ToolResult, tool
+from .tools import ToolResult, Toolkit, tool
 
 __all__ = (
     "Agent",
     "AgentReply",
+    "AgentSpec",
     "AudioInput",
     "BinaryInput",
     "Context",
@@ -31,6 +33,7 @@ __all__ = (
     "TextInput",
     "ToolResult",
     "UploadedFile",
+    "Toolkit",
     "Variable",
     "VideoInput",
     "observer",
