@@ -35,7 +35,10 @@ class MemoryTool(Tool):
     See: https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool
     """
 
-    name = MEMORY_TOOL_NAME
+    __slots__ = (
+        "_schema",
+        "name",
+    )
 
     def __init__(
         self,
@@ -43,6 +46,7 @@ class MemoryTool(Tool):
         version: Literal["memory_20250818"] = "memory_20250818",
     ) -> None:
         self._schema = MemoryToolSchema(version=version)
+        self.name = MEMORY_TOOL_NAME
 
     async def schemas(self, context: "Context") -> list[ToolSchema]:
         return [self._schema]

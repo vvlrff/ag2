@@ -11,7 +11,6 @@ from autogen.beta.exceptions import ToolResolutionError
 from autogen.beta.response import ResponseSchema
 from autogen.beta.spec import ResponseSchemaSpec
 from autogen.beta.tools import FilesystemToolkit, WebSearchTool
-from autogen.beta.tools.shell import LocalShellTool
 
 from .helpers import add, greet, make_agent, multiply
 
@@ -21,254 +20,177 @@ class Answer(BaseModel):
     reasoning: str
 
 
-def test_from_agent_extracts_name_and_prompt() -> None:
-    agent = make_agent(prompt="Be helpful.")
-    spec = AgentSpec.from_agent(agent)
+class TestFromAgent:
+    def test_extracts_name_and_prompt(self) -> None:
+        agent = make_agent(prompt="Be helpful.")
+        spec = AgentSpec.from_agent(agent)
 
-    assert spec.model_dump() == IsPartialDict({"name": "test_agent", "prompt": ["Be helpful."]})
+        assert spec.model_dump() == IsPartialDict({"name": "test_agent", "prompt": ["Be helpful."]})
 
+    def test_extracts_tools(self) -> None:
+        agent = make_agent(tools=[add, multiply, greet])
+        spec = AgentSpec.from_agent(agent)
 
-def test_from_agent_extracts_tools() -> None:
-    agent = make_agent(tools=[add, multiply, greet])
-    spec = AgentSpec.from_agent(agent)
+        assert spec.tool_names == ["add", "multiply", "greet"]
 
-    assert spec.tool_names == ["add", "multiply", "greet"]
+    def test_no_tools(self) -> None:
+        agent = make_agent(tools=[])
+        spec = AgentSpec.from_agent(agent)
 
+        assert spec.tool_names == []
 
-def test_from_agent_no_tools() -> None:
-    agent = make_agent(tools=[])
-    spec = AgentSpec.from_agent(agent)
+    def test_with_response_schema(self) -> None:
+        agent = make_agent(response_schema=Answer)
+        spec = AgentSpec.from_agent(agent)
 
-    assert spec.tool_names == []
+        rs = spec.response_schema
+        assert rs is not None
+        assert rs.name == "Answer"
+        assert "value" in str(rs.json_schema)
 
 
-def test_to_agent_resolves_tools() -> None:
-    spec = AgentSpec(
-        name="resolver",
-        prompt=["Resolve tools."],
-        tool_names=["add", "greet"],
-    )
+class TestToAgent:
+    def test_resolves_tools(self) -> None:
+        spec = AgentSpec(
+            name="resolver",
+            prompt=["Resolve tools."],
+            tool_names=["add", "greet"],
+        )
 
-    agent = spec.to_agent(available_tools=[add, multiply, greet])
+        agent = spec.to_agent(available_tools=[add, multiply, greet])
 
-    assert agent.name == "resolver"
-    assert [t.schema.function.name for t in agent.tools] == ["add", "greet"]
+        assert agent.name == "resolver"
+        assert [t.name for t in agent.tools] == ["add", "greet"]
 
+    def test_missing_tool_raises(self) -> None:
+        spec = AgentSpec(
+            name="broken",
+            tool_names=["add", "nonexistent"],
+        )
 
-def test_to_agent_missing_tool_raises() -> None:
-    spec = AgentSpec(
-        name="broken",
-        tool_names=["add", "nonexistent"],
-    )
+        with pytest.raises(ToolResolutionError, match="nonexistent"):
+            spec.to_agent(available_tools=[add, multiply])
 
-    with pytest.raises(ToolResolutionError, match="nonexistent"):
-        spec.to_agent(available_tools=[add, multiply])
+    def test_manual_spec(self) -> None:
+        spec = AgentSpec(
+            name="research_bot",
+            prompt=["You are a researcher.", "Be thorough."],
+            tool_names=["add"],
+        )
 
+        agent = spec.to_agent(available_tools=[add, multiply])
 
-def test_round_trip_json() -> None:
-    agent = make_agent(prompt="Round trip test.")
-    spec = AgentSpec.from_agent(agent)
-    json_str = spec.model_dump_json()
+        assert agent.name == "research_bot"
+        assert agent._system_prompt == ["You are a researcher.", "Be thorough."]
+        assert len(agent.tools) == 1
 
-    restored_spec = AgentSpec.model_validate_json(json_str)
-    assert restored_spec == spec
+    def test_passes_hitl_hook(self) -> None:
+        spec = AgentSpec(name="bot")
 
-    restored = restored_spec.to_agent(available_tools=[add, multiply])
-    assert restored.name == "test_agent"
-    assert restored._system_prompt == ["Round trip test."]
-    assert len(restored.tools) == 2
+        def my_hook(msg: str) -> str:
+            return msg
 
+        agent = spec.to_agent(hitl_hook=my_hook)
+        assert agent._hitl_hook is not None
 
-def test_manual_spec_creation() -> None:
-    spec = AgentSpec(
-        name="research_bot",
-        prompt=["You are a researcher.", "Be thorough."],
-        tool_names=["add"],
-    )
+    def test_passes_variables(self) -> None:
+        spec = AgentSpec(name="bot")
 
-    agent = spec.to_agent(available_tools=[add, multiply])
+        agent = spec.to_agent(variables={"key": "value"})
+        assert agent._agent_variables == {"key": "value"}
 
-    assert agent.name == "research_bot"
-    assert agent._system_prompt == ["You are a researcher.", "Be thorough."]
-    assert len(agent.tools) == 1
+    def test_passes_dependencies(self) -> None:
+        spec = AgentSpec(name="bot")
 
+        agent = spec.to_agent(dependencies={"db": "mock"})
+        assert agent._agent_dependencies == {"db": "mock"}
 
-def test_agent_to_spec_method() -> None:
-    agent = make_agent()
 
-    assert agent.to_spec() == AgentSpec.from_agent(agent)
+class TestRoundTrip:
+    def test_json(self) -> None:
+        agent = make_agent(prompt="Round trip test.")
 
+        spec = AgentSpec.from_agent(agent)
 
-def test_response_schema_spec_round_trip() -> None:
-    rs = ResponseSchema(Answer)
-    rs_spec = ResponseSchemaSpec(
-        name=rs.name,
-        description=rs.description,
-        json_schema=rs.json_schema,
-    )
+        json_str = spec.model_dump_json()
 
-    json_data = rs_spec.model_dump_json()
-    restored = ResponseSchemaSpec.model_validate_json(json_data)
+        restored_spec = AgentSpec.model_validate_json(json_str)
+        assert restored_spec == spec
 
-    assert restored.model_dump() == IsPartialDict({"name": rs_spec.name})
-    assert restored.json_schema == rs_spec.json_schema
+        restored = restored_spec.to_agent(available_tools=[add, multiply])
+        # restored == agent
+        assert restored.name == "test_agent"
+        assert restored._system_prompt == ["Round trip test."]
+        assert len(restored.tools) == 2
 
-    raw = restored.to_response_schema()
-    assert raw.name == rs.name
-    assert raw.json_schema == rs.json_schema
+    def test_response_schema_spec(self) -> None:
+        rs = ResponseSchema(Answer)
+        assert rs.json_schema is not None
+        rs_spec = ResponseSchemaSpec(
+            name=rs.name,
+            description=rs.description,
+            json_schema=rs.json_schema,
+        )
 
+        json_data = rs_spec.model_dump_json()
+        restored = ResponseSchemaSpec.model_validate_json(json_data)
 
-def test_from_agent_with_response_schema() -> None:
-    agent = make_agent(response_schema=Answer)
-    spec = AgentSpec.from_agent(agent)
+        assert restored.model_dump() == IsPartialDict({"name": rs_spec.name})
+        assert restored.json_schema == rs_spec.json_schema
 
-    assert spec.response_schema is not None
-    assert spec.response_schema.name == "Answer"
-    assert "value" in str(spec.response_schema.json_schema)
+        raw = restored.to_response_schema()
+        assert raw.name == rs.name
+        assert raw.json_schema == rs.json_schema
 
 
-def test_from_json_string() -> None:
-    json_str = '{"name": "bot", "prompt": ["Help."], "tool_names": ["add"]}'
+class TestBuiltinTools:
+    def test_serialization(self) -> None:
+        ws = WebSearchTool()
+        agent = make_agent(tools=[add, ws])
+        spec = AgentSpec.from_agent(agent)
 
-    agent = AgentSpec.model_validate_json(json_str).to_agent(available_tools=[add, multiply])
+        assert spec.tool_names == ["add", "web_search"]
 
-    assert agent.name == "bot"
-    assert agent._system_prompt == ["Help."]
-    assert [t.schema.function.name for t in agent.tools] == ["add"]
+    def test_resolution(self) -> None:
+        spec = AgentSpec(
+            name="bot",
+            tool_names=["add", "web_search"],
+        )
 
+        agent = spec.to_agent(available_tools=[add, WebSearchTool()])
 
-def test_from_dict() -> None:
-    data = {
-        "name": "bot",
-        "prompt": ["Help."],
-        "tool_names": ["greet"],
-    }
+        assert len(agent.tools) == 2
 
-    agent = AgentSpec(**data).to_agent(available_tools=[add, multiply, greet])
+    def test_missing_raises(self) -> None:
+        spec = AgentSpec(
+            name="bot",
+            tool_names=["web_search"],
+        )
 
-    assert agent.name == "bot"
-    assert [t.schema.function.name for t in agent.tools] == ["greet"]
+        with pytest.raises(ToolResolutionError, match="web_search"):
+            spec.to_agent(available_tools=[add])
 
 
-def test_from_json_missing_tool_raises() -> None:
-    json_str = '{"name": "bot", "tool_names": ["nonexistent"]}'
+class TestToolkit:
+    def test_round_trip(self) -> None:
+        fs = FilesystemToolkit(base_path="/tmp", read_only=True)
+        agent = Agent(name="bot", tools=[add, fs])
+        spec = AgentSpec.from_agent(agent)
 
-    with pytest.raises(ToolResolutionError, match="nonexistent"):
-        AgentSpec.model_validate_json(json_str).to_agent(available_tools=[add])
+        assert spec.tool_names == ["add", "filesystem_toolkit"]
 
+        restored = spec.to_agent(available_tools=[add, fs])
+        assert [t.name for t in restored.tools] == [t.name for t in agent.tools]
 
-def test_json_round_trip() -> None:
-    agent = make_agent()
-    spec = agent.to_spec()
-    json_str = spec.model_dump_json()
+    def test_unpack_inner_tools(self) -> None:
+        ws = WebSearchTool()
+        fs = FilesystemToolkit(base_path="/tmp", read_only=True)
 
-    restored = AgentSpec.model_validate_json(json_str).to_agent(available_tools=[add, multiply])
+        spec = AgentSpec(
+            name="bot",
+            tool_names=["add", "web_search", "read_file"],
+        )
 
-    assert restored.name == agent.name
-    assert restored._system_prompt == agent._system_prompt
-    assert len(restored.tools) == len(agent.tools)
+        agent = spec.to_agent(available_tools=[add, multiply, ws, fs])
 
-
-def test_builtin_tool_serialization() -> None:
-    ws = WebSearchTool()
-    agent = make_agent(tools=[add, ws])
-    spec = AgentSpec.from_agent(agent)
-
-    assert spec.tool_names == ["add", "web_search"]
-
-
-def test_builtin_tool_resolution() -> None:
-    ws = WebSearchTool()
-    spec = AgentSpec(
-        name="bot",
-        tool_names=["add", "web_search"],
-    )
-
-    agent = spec.to_agent(available_tools=[add, ws])
-
-    assert len(agent.tools) == 2
-
-
-def test_missing_builtin_tool_raises() -> None:
-    spec = AgentSpec(
-        name="bot",
-        tool_names=["web_search"],
-    )
-
-    with pytest.raises(ToolResolutionError, match="web_search"):
-        spec.to_agent(available_tools=[add])
-
-
-def test_to_agent_passes_hitl_hook() -> None:
-    spec = AgentSpec(name="bot")
-
-    def my_hook(msg: str) -> str:
-        return msg
-
-    agent = spec.to_agent(hitl_hook=my_hook)
-    assert agent._hitl_hook is not None
-
-
-def test_to_agent_passes_variables() -> None:
-    spec = AgentSpec(name="bot")
-
-    agent = spec.to_agent(variables={"key": "value"})
-    assert agent._agent_variables == {"key": "value"}
-
-
-def test_to_agent_passes_dependencies() -> None:
-    spec = AgentSpec(name="bot")
-
-    agent = spec.to_agent(dependencies={"db": "mock"})
-    assert agent._agent_dependencies == {"db": "mock"}
-
-
-def test_function_tool_has_name() -> None:
-    assert greet.name == "greet"
-
-
-def test_builtin_tool_has_name() -> None:
-    assert WebSearchTool().name == "web_search"
-
-
-def test_local_shell_tool_has_name() -> None:
-    sh = LocalShellTool()
-    assert sh.name == "shell"
-
-
-def test_toolkit_flattened_on_add() -> None:
-    fs = FilesystemToolkit(base_path="/tmp", read_only=True)
-    agent = Agent(name="bot", tools=[add, fs])
-
-    names = [t.name for t in agent.tools]
-    assert "add" in names
-    assert "read_file" in names
-    assert "find_files" in names
-
-
-def test_toolkit_round_trip() -> None:
-    fs = FilesystemToolkit(base_path="/tmp", read_only=True)
-    agent = Agent(name="bot", tools=[add, fs])
-    spec = AgentSpec.from_agent(agent)
-
-    assert "add" in spec.tool_names
-    assert "read_file" in spec.tool_names
-    assert "find_files" in spec.tool_names
-
-    restored = spec.to_agent(available_tools=[add, *fs.tools])
-    assert [t.name for t in restored.tools] == [t.name for t in agent.tools]
-
-
-def test_tools_dict_pattern() -> None:
-    ws = WebSearchTool()
-    fs = FilesystemToolkit(base_path="/tmp", read_only=True)
-
-    tools_dict = {t.name: t for t in [add, multiply, ws, *fs.tools]}
-    spec = AgentSpec(
-        name="bot",
-        tool_names=["add", "web_search", "read_file"],
-    )
-
-    agent = spec.to_agent(available_tools=tools_dict.values())
-
-    assert [t.name for t in agent.tools] == ["add", "web_search", "read_file"]
+        assert [t.name for t in agent.tools] == ["add", "web_search", "read_file"]

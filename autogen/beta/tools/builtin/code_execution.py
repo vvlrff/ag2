@@ -30,7 +30,10 @@ class CodeExecutionTool(Tool):
     into the correct provider-specific API format.
     """
 
-    name = CODE_EXECUTION_TOOL_NAME
+    __slots__ = (
+        "name",
+        "_schema",
+    )
 
     def __init__(
         self,
@@ -38,6 +41,7 @@ class CodeExecutionTool(Tool):
         version: Literal["code_execution_20250825"] = "code_execution_20250825",
     ) -> None:
         self._schema = CodeExecutionToolSchema(version=version)
+        self.name = CODE_EXECUTION_TOOL_NAME
 
     async def schemas(self, context: "Context") -> list[ToolSchema]:
         return [self._schema]

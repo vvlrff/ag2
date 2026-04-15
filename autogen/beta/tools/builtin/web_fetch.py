@@ -29,8 +29,10 @@ class WebFetchToolSchema(ToolSchema):
 
 
 class WebFetchTool(Tool):
-    __slots__ = ("_params",)
-    name = WEB_FETCH_TOOL_NAME
+    __slots__ = (
+        "_params",
+        "name",
+    )
 
     def __init__(
         self,
@@ -55,6 +57,8 @@ class WebFetchTool(Tool):
             self._params["max_content_tokens"] = max_content_tokens
         if version is not None:
             self._params["web_fetch_version"] = version
+
+        self.name = WEB_FETCH_TOOL_NAME
 
     async def schemas(self, context: "Context") -> list[WebFetchToolSchema]:
         resolved = {k: resolve_variable(v, context, param_name=k) for k, v in self._params.items()}

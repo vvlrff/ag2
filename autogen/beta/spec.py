@@ -15,9 +15,8 @@ from autogen.beta.middleware.base import MiddlewareFactory
 from autogen.beta.observer import Observer
 from autogen.beta.response.proto import ResponseProto
 from autogen.beta.response.schema import RawSchema
+from autogen.beta.tools.final import FunctionTool, Toolkit
 from autogen.beta.tools.tool import Tool
-
-__all__ = ("AgentSpec", "ResponseSchemaSpec")
 
 
 class ResponseSchemaSpec(BaseModel):
@@ -96,17 +95,17 @@ class AgentSpec(BaseModel):
         """Reconstruct an ``Agent`` from this spec."""
 
         # Build name -> tool index from available_tools
-        tool_index: dict[str, Tool | Callable[..., Any]] = {}
-        for t in available_tools:
-            if isinstance(t, Tool):
-                tool_index[t.name] = t
-            elif callable(t):
-                name = getattr(t, "__name__", None)
-                if name is not None:
-                    tool_index[name] = t
+        tool_index: dict[str, Tool] = {}
+
+        tools_to_visit = [FunctionTool.ensure_tool(t) for t in available_tools]
+        while tools_to_visit:
+            tool = tools_to_visit.pop()
+            tool_index[tool.name] = tool
+            if isinstance(tool, Toolkit):
+                tools_to_visit.extend(tool.tools)
 
         # Resolve tools by name
-        resolved_tools: list[Tool | Callable[..., Any]] = []
+        resolved_tools: list[Tool] = []
         missing: list[str] = []
         for name in self.tool_names:
             if name in tool_index:
@@ -115,7 +114,7 @@ class AgentSpec(BaseModel):
                 missing.append(name)
 
         if missing:
-            raise ToolResolutionError(missing, sorted(tool_index))
+            raise ToolResolutionError(missing, sorted(tool_index.keys()))
 
         # Response schema: explicit param > spec > None
         final_rs = response_schema

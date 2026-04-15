@@ -38,7 +38,7 @@ from .observer import observer as observer_factory
 from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream
 from .tools.executor import ToolExecutor
-from .tools.final import FunctionParameters, FunctionTool, FunctionToolSchema, Toolkit, tool
+from .tools.final import FunctionParameters, FunctionTool, FunctionToolSchema, tool
 from .tools.schemas import ToolSchema
 from .tools.tool import Tool
 from .types import ClassInfo, Omittable, omit
@@ -322,7 +322,7 @@ class Agent(Generic[TResult]):
         self._observers = list(observers)
 
         self.dependency_provider = Provider()
-        self.tools: list[FunctionTool] = []
+        self.tools: list[Tool] = []
         for t in tools:
             self.add_tool(t)
 
@@ -424,12 +424,7 @@ class Agent(Generic[TResult]):
         return self
 
     def add_tool(self, t: Callable[..., Any] | Tool) -> "Agent[TResult]":
-        if isinstance(t, Toolkit):
-            for inner in t.tools:
-                inner.provider = self.dependency_provider
-                self.tools.append(inner)
-        else:
-            self.tools.append(FunctionTool.ensure_tool(t, provider=self.dependency_provider))
+        self.tools.append(FunctionTool.ensure_tool(t, provider=self.dependency_provider))
         return self
 
     def tool(

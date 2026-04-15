@@ -29,8 +29,10 @@ class MCPServerToolSchema(ToolSchema):
 
 
 class MCPServerTool(Tool):
-    __slots__ = ("_params",)
-    name = MCP_SERVER_TOOL_NAME
+    __slots__ = (
+        "_params",
+        "name",
+    )
 
     def __init__(
         self,
@@ -57,6 +59,8 @@ class MCPServerTool(Tool):
             self._params["blocked_tools"] = blocked_tools
         if headers is not None:
             self._params["headers"] = headers
+
+        self.name = MCP_SERVER_TOOL_NAME
 
     async def schemas(self, context: "Context") -> list[MCPServerToolSchema]:
         resolved = {k: resolve_variable(v, context, param_name=k) for k, v in self._params.items()}

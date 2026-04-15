@@ -56,11 +56,14 @@ class SkillsTool(Tool):
         SkillsTool("pptx", Skill("xlsx", version="latest"))
     """
 
-    __slots__ = ("_skills",)
-    name = SKILLS_TOOL_NAME
+    __slots__ = (
+        "_skills",
+        "name",
+    )
 
     def __init__(self, *skills: str | Skill) -> None:
         self._skills: list[Skill] = [s if isinstance(s, Skill) else Skill(id=s) for s in skills]
+        self.name = SKILLS_TOOL_NAME
 
     async def schemas(self, context: "Context") -> list[SkillsToolSchema]:
         return [SkillsToolSchema(skills=list(self._skills))]

@@ -80,8 +80,10 @@ class ShellTool(Tool):
     - https://developers.openai.com/api/docs/guides/tools-shell
     """
 
-    __slots__ = ("_params",)
-    name = SHELL_TOOL_NAME
+    __slots__ = (
+        "_params",
+        "name",
+    )
 
     def __init__(
         self,
@@ -89,14 +91,14 @@ class ShellTool(Tool):
         environment: ShellEnvironment | Variable | None = None,
         version: Literal["bash_20250124"] = "bash_20250124",
     ) -> None:
-        self._params: dict[str, object] = {}
+        self._params: dict[str, object] = {"version": version}
         if environment is not None:
             self._params["environment"] = environment
-        self._version = version
+        self.name = SHELL_TOOL_NAME
 
     async def schemas(self, context: "Context") -> list[ShellToolSchema]:
         resolved = {k: resolve_variable(v, context, param_name=k) for k, v in self._params.items()}
-        return [ShellToolSchema(version=self._version, **resolved)]
+        return [ShellToolSchema(**resolved)]
 
     def register(
         self,
