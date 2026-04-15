@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from collections.abc import Sequence
-from typing import Any, NoReturn
+from typing import Any
 from unittest.mock import MagicMock
 
 from typing_extensions import Self
@@ -65,7 +65,7 @@ class TrackingConfig(ModelConfig):
     def create(self) -> TrackingClient:
         return TrackingClient(self.config.create(), self.mock)
 
-    def create_files_client(self) -> "NoReturn":
+    def create_files_client(self) -> None:
         raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
 
 
@@ -81,5 +81,5 @@ class TestConfig(ModelConfig):
     def create(self) -> TestClient:
         return TestClient(*self.events)
 
-    def create_files_client(self) -> "NoReturn":
+    def create_files_client(self) -> None:
         raise NotImplementedError(f"{type(self).__name__} does not support Files API.")

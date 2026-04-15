@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass, replace
-from typing import NoReturn, TypedDict
+from typing import TypedDict
 
 from typing_extensions import Unpack
 
@@ -59,5 +59,5 @@ class OllamaConfig(ModelConfig):
             create_options=options,
         )
 
-    def create_files_client(self) -> "NoReturn":
+    def create_files_client(self) -> None:
         raise NotImplementedError(f"{type(self).__name__} does not support Files API.")
