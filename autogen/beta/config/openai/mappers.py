@@ -202,6 +202,13 @@ def convert_messages(
                     else:
                         raise UnsupportedInputError(type(inp).__name__, "openai-completions")
 
+                elif isinstance(inp, FileIdInput):
+                    raise UnsupportedInputError(
+                        "FileIdInput is not supported by OpenAI Chat Completions API. "
+                        "Use OpenAIResponsesConfig instead of OpenAIConfig to work with file uploads.",
+                        "openai-completions",
+                    )
+
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "openai-completions")
 
