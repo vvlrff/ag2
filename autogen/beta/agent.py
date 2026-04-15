@@ -37,7 +37,7 @@ from .observer import observer as observer_factory
 from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream
 from .tools.executor import ToolExecutor
-from .tools.final import FunctionParameters, FunctionTool, tool
+from .tools.final import FunctionParameters, FunctionTool, FunctionToolSchema, tool
 from .tools.schemas import ToolSchema
 from .tools.tool import Tool
 from .types import ClassInfo, Omittable, omit
@@ -624,7 +624,14 @@ class Agent(Generic[TResult]):
         for t in all_tools:
             schemas = await t.schemas(context)
             all_schemas.extend(schemas)
-            known_tool_names.add(t.name)
+
+            # iterate over schemas to support toolkits
+            for schema in schemas:
+                if isinstance(schema, FunctionToolSchema):
+                    known_tool_names.add(schema.function.name)
+                else:
+                    # fallback to tool name (built-in tools)
+                    known_tool_names.add(t.name)
 
         middleware_instances: list[BaseMiddleware] = []
         agent_turn: AgentTurn = _execute_turn
