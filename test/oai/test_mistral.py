@@ -8,8 +8,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-pytest.importorskip("mistralai")
-
+from autogen.import_utils import run_for_optional_imports
 from autogen.llm_config import LLMConfig
 from autogen.oai.mistral import MistralAIClient, MistralLLMConfigEntry, calculate_mistral_cost
 
@@ -26,6 +25,11 @@ def mock_response():
             self.model = model
 
     return MockResponse
+
+
+@pytest.fixture
+def mistral_client():
+    return MistralAIClient(api_key="fake_api_key")
 
 
 def test_mistral_llm_config_entry():
@@ -53,6 +57,7 @@ def test_mistral_llm_config_entry():
 
 
 # Test initialization and configuration
+@run_for_optional_imports(["mistralai"], "mistral")
 def test_initialization():
     # Missing any api_key
     with pytest.raises(AssertionError) as assertinfo:
@@ -67,7 +72,14 @@ def test_initialization():
     MistralAIClient(api_key="fake_api_key")  # Should create okay now.
 
 
+# Test standard initialization
+@run_for_optional_imports(["mistralai"], "mistral")
+def test_valid_initialization(mistral_client):
+    assert mistral_client.api_key == "fake_api_key", "Config api_key should be correctly set"
+
+
 # Test cost calculation
+@run_for_optional_imports(["mistralai"], "mistral")
 def test_cost_calculation(mock_response):
     response = mock_response(
         text="Example response",
@@ -82,8 +94,9 @@ def test_cost_calculation(mock_response):
 
 
 # Test text generation
+@run_for_optional_imports(["mistralai"], "mistral")
 @patch("autogen.oai.mistral.MistralAIClient.create")
-def test_create_response(mock_chat):
+def test_create_response(mock_chat, mistral_client):
     # Mock `mistral_response = client.chat.complete(**mistral_params)`
     mock_mistral_response = MagicMock()
     mock_mistral_response.choices = [
@@ -102,7 +115,7 @@ def test_create_response(mock_chat):
     }
 
     # Call the create method
-    response = MistralAIClient(api_key="fake_api_key").create(params)
+    response = mistral_client.create(params)
 
     # Assertions to check if response is structured as expected
     assert response.choices[0].message.content == "Example Mistral response", (
@@ -115,8 +128,9 @@ def test_create_response(mock_chat):
 
 
 # Test functions/tools
+@run_for_optional_imports(["mistralai"], "mistral")
 @patch("autogen.oai.mistral.MistralAIClient.create")
-def test_create_response_with_tool_call(mock_chat):
+def test_create_response_with_tool_call(mock_chat, mistral_client):
     # Mock `mistral_response = client.chat.complete(**mistral_params)`
     mock_function = MagicMock(name="currency_calculator")
     mock_function.name = "currency_calculator"
@@ -167,7 +181,7 @@ def test_create_response_with_tool_call(mock_chat):
     ]
 
     # Call the chat method
-    response = MistralAIClient(api_key="fake_api_key").create({
+    response = mistral_client.create({
         "messages": mistral_messages,
         "tools": converted_functions,
         "model": "mistral-medium-latest",

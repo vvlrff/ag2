@@ -109,14 +109,14 @@ class ModuleInfo:
         Raises:
             ValueError: If the module information is invalid
         """
-        pattern = re.compile(r"^(?P<name>[a-zA-Z0-9-_.]+?)(?P<constraint>[><=].*)$|^(?P<name2>[a-zA-Z0-9-_.]+)$")
+        pattern = re.compile(r"^(?P<name>[a-zA-Z0-9-_]+)(?P<constraint>.*)$")
         match = pattern.match(module_info.strip())
 
         if not match:
             raise ValueError(f"Invalid package information: {module_info}")
 
-        name = match.group("name") or match.group("name2")
-        constraints = (match.group("constraint") or "").strip()
+        name = match.group("name")
+        constraints = match.group("constraint").strip()
         min_version = max_version = None
         min_inclusive = max_inclusive = False
 
