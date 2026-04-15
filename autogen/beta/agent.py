@@ -15,9 +15,6 @@ from fast_depends import Provider
 from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
 
-from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME, WebSearchToolSchema
-from autogen.beta.events import BinaryResult
-
 from .annotations import Context
 from .config import LLMClient, ModelConfig
 from .events import (
