@@ -4,18 +4,14 @@
 #
 # Portions derived from  https://github.com/microsoft/autogen are under the MIT License.
 # SPDX-License-Identifier: MIT
-import importlib.util
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+pytest.importorskip("mistralai")
+
 from autogen.llm_config import LLMConfig
 from autogen.oai.mistral import MistralAIClient, MistralLLMConfigEntry, calculate_mistral_cost
-
-mistral_installed = pytest.mark.skipif(
-    importlib.util.find_spec("mistralai") is None,
-    reason="mistralai is not installed",
-)
 
 
 # Fixtures for mock data
@@ -57,7 +53,6 @@ def test_mistral_llm_config_entry():
 
 
 # Test initialization and configuration
-@mistral_installed
 def test_initialization():
     # Missing any api_key
     with pytest.raises(AssertionError) as assertinfo:
@@ -73,7 +68,6 @@ def test_initialization():
 
 
 # Test cost calculation
-@mistral_installed
 def test_cost_calculation(mock_response):
     response = mock_response(
         text="Example response",
@@ -88,7 +82,6 @@ def test_cost_calculation(mock_response):
 
 
 # Test text generation
-@mistral_installed
 @patch("autogen.oai.mistral.MistralAIClient.create")
 def test_create_response(mock_chat):
     # Mock `mistral_response = client.chat.complete(**mistral_params)`
@@ -122,7 +115,6 @@ def test_create_response(mock_chat):
 
 
 # Test functions/tools
-@mistral_installed
 @patch("autogen.oai.mistral.MistralAIClient.create")
 def test_create_response_with_tool_call(mock_chat):
     # Mock `mistral_response = client.chat.complete(**mistral_params)`
