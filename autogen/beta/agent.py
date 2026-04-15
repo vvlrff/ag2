@@ -16,7 +16,6 @@ from pydantic import ValidationError
 from typing_extensions import TypeVar as TypeVar313
 
 from autogen.beta.events import BinaryResult
-from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME, WebSearchToolSchema
 
 from .annotations import Context
 from .config import LLMClient, ModelConfig
@@ -38,7 +37,7 @@ from .observer import observer as observer_factory
 from .response import ResponseProto, ResponseSchema
 from .stream import MemoryStream, Stream
 from .tools.executor import ToolExecutor
-from .tools.final import FunctionParameters, FunctionTool, FunctionToolSchema, tool
+from .tools.final import FunctionParameters, FunctionTool, tool
 from .tools.schemas import ToolSchema
 from .tools.tool import Tool
 from .types import ClassInfo, Omittable, omit
@@ -621,16 +620,11 @@ class Agent(Generic[TResult]):
         )
 
         all_schemas: list[ToolSchema] = []
-        known_tools: set[str] = set()
+        known_tool_names: set[str] = set()
         for t in all_tools:
             schemas = await t.schemas(context)
             all_schemas.extend(schemas)
-
-            for schema in schemas:
-                if isinstance(schema, FunctionToolSchema):
-                    known_tools.add(schema.function.name)
-                elif isinstance(schema, WebSearchToolSchema):
-                    known_tools.add(WEB_SEARCH_TOOL_NAME)
+            known_tool_names.add(t.name)
 
         middleware_instances: list[BaseMiddleware] = []
         agent_turn: AgentTurn = _execute_turn
@@ -684,7 +678,7 @@ class Agent(Generic[TResult]):
                 stack,
                 context,
                 tools=all_tools,
-                known_tools=known_tools,
+                known_tools=known_tool_names,
                 middleware=middleware_instances,
             )
 

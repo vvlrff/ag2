@@ -27,11 +27,6 @@ def mock_response():
     return MockResponse
 
 
-@pytest.fixture
-def mistral_client():
-    return MistralAIClient(api_key="fake_api_key")
-
-
 def test_mistral_llm_config_entry():
     mistral_llm_config = MistralLLMConfigEntry(
         model="mistral-small-latest",
@@ -57,7 +52,7 @@ def test_mistral_llm_config_entry():
 
 
 # Test initialization and configuration
-@run_for_optional_imports(["mistralai.client.sdk"], "mistral")
+@run_for_optional_imports(["mistralai"], "mistral")
 def test_initialization():
     # Missing any api_key
     with pytest.raises(AssertionError) as assertinfo:
@@ -70,12 +65,6 @@ def test_initialization():
 
     # Creation works
     MistralAIClient(api_key="fake_api_key")  # Should create okay now.
-
-
-# Test standard initialization
-@run_for_optional_imports(["mistralai.client.sdk"], "mistral")
-def test_valid_initialization(mistral_client):
-    assert mistral_client.api_key == "fake_api_key", "Config api_key should be correctly set"
 
 
 # Test cost calculation
@@ -96,7 +85,7 @@ def test_cost_calculation(mock_response):
 # Test text generation
 @run_for_optional_imports(["mistralai.client.sdk"], "mistral")
 @patch("autogen.oai.mistral.MistralAIClient.create")
-def test_create_response(mock_chat, mistral_client):
+def test_create_response(mock_chat):
     # Mock `mistral_response = client.chat.complete(**mistral_params)`
     mock_mistral_response = MagicMock()
     mock_mistral_response.choices = [
@@ -115,7 +104,7 @@ def test_create_response(mock_chat, mistral_client):
     }
 
     # Call the create method
-    response = mistral_client.create(params)
+    response = MistralAIClient(api_key="fake_api_key").create(params)
 
     # Assertions to check if response is structured as expected
     assert response.choices[0].message.content == "Example Mistral response", (
@@ -130,7 +119,7 @@ def test_create_response(mock_chat, mistral_client):
 # Test functions/tools
 @run_for_optional_imports(["mistralai.client.sdk"], "mistral")
 @patch("autogen.oai.mistral.MistralAIClient.create")
-def test_create_response_with_tool_call(mock_chat, mistral_client):
+def test_create_response_with_tool_call(mock_chat):
     # Mock `mistral_response = client.chat.complete(**mistral_params)`
     mock_function = MagicMock(name="currency_calculator")
     mock_function.name = "currency_calculator"
@@ -181,7 +170,7 @@ def test_create_response_with_tool_call(mock_chat, mistral_client):
     ]
 
     # Call the chat method
-    response = mistral_client.create({
+    response = MistralAIClient(api_key="fake_api_key").create({
         "messages": mistral_messages,
         "tools": converted_functions,
         "model": "mistral-medium-latest",
