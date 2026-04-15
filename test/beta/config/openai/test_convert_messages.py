@@ -93,13 +93,13 @@ class TestFileIdInput:
             }
         ]
 
-    def test_responses_with_filename(self) -> None:
+    def test_responses_with_filename_ignores_filename(self) -> None:
         result = events_to_responses_input([ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="report.pdf")])])
 
         assert result == [
             {
                 "role": "user",
-                "content": [{"type": "input_file", "file_id": self.FILE_ID, "filename": "report.pdf"}],
+                "content": [{"type": "input_file", "file_id": self.FILE_ID}],
             }
         ]
 

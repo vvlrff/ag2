@@ -126,12 +126,9 @@ def events_to_responses_input(messages: Sequence[BaseEvent]) -> list[dict[str, A
                     result.append({"role": "user", "content": [{"type": "input_file", "file_url": inp.url}]})
 
                 elif isinstance(inp, FileIdInput):
-                    item: dict[str, Any] = {"type": "input_file", "file_id": inp.file_id}
-                    if inp.filename is not None:
-                        item["filename"] = inp.filename
                     result.append({
                         "role": "user",
-                        "content": [item],
+                        "content": [{"type": "input_file", "file_id": inp.file_id}],
                     })
 
                 elif isinstance(inp, BinaryInput):

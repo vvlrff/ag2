@@ -27,6 +27,7 @@ from autogen.beta.events import (
     ToolCallEvent,
     ToolCallsEvent,
 )
+from autogen.beta.events.input_events import FileIdInput, ModelRequest
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.skills import SkillsToolSchema
@@ -137,6 +138,14 @@ class AnthropicClient(LLMClient):
             )
             existing_betas.discard("")
             existing_betas.update(["code-execution-2025-08-25", "skills-2025-10-02"])
+            create_kwargs.setdefault("extra_headers", {})
+            create_kwargs["extra_headers"]["anthropic-beta"] = ",".join(sorted(existing_betas))
+
+        # Files API beta: required when messages contain file_id references
+        if any(isinstance(inp, FileIdInput) for msg in messages if isinstance(msg, ModelRequest) for inp in msg.inputs):
+            existing_betas = set((create_kwargs.get("extra_headers") or {}).get("anthropic-beta", "").split(","))
+            existing_betas.discard("")
+            existing_betas.add("files-api-2025-04-14")
             create_kwargs.setdefault("extra_headers", {})
             create_kwargs["extra_headers"]["anthropic-beta"] = ",".join(sorted(existing_betas))
 

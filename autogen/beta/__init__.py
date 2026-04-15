@@ -7,6 +7,7 @@ from fast_depends import Depends
 from .agent import Agent, AgentReply
 from .annotations import Context, Inject, Variable
 from .events import AudioInput, BinaryInput, DocumentInput, ImageInput, TextInput, VideoInput
+from .files import FileContent, FilesAPI, UploadedFile
 from .observer import observer
 from .response import PromptedSchema, ResponseSchema, response_schema
 from .stream import MemoryStream
@@ -20,6 +21,8 @@ __all__ = (
     "Context",
     "Depends",
     "DocumentInput",
+    "FileContent",
+    "FilesAPI",
     "ImageInput",
     "Inject",
     "MemoryStream",
@@ -27,6 +30,7 @@ __all__ = (
     "ResponseSchema",
     "TextInput",
     "ToolResult",
+    "UploadedFile",
     "Variable",
     "VideoInput",
     "observer",

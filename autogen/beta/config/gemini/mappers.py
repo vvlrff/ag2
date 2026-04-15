@@ -14,6 +14,7 @@ from autogen.beta.events.input_events import (
     AudioUrlInput,
     BinaryInput,
     DocumentUrlInput,
+    FileIdInput,
     ImageUrlInput,
     VideoUrlInput,
 )
@@ -184,6 +185,9 @@ def convert_messages(
                         parts.append(types.Part.from_uri(file_uri=inp.url, mime_type=mime))
                     else:
                         parts.append(types.Part(file_data=types.FileData(file_uri=inp.url)))
+                elif isinstance(inp, FileIdInput):
+                    file_uri = f"https://generativelanguage.googleapis.com/v1beta/{inp.file_id}"
+                    parts.append(types.Part(file_data=types.FileData(file_uri=file_uri)))
                 elif isinstance(inp, BinaryInput):
                     part = types.Part.from_bytes(data=inp.data, mime_type=inp.media_type)
                     _apply_vendor_metadata(part, inp.vendor_metadata)
