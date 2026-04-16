@@ -78,7 +78,7 @@ class TestSearchExecution:
         assert "AG2 is an agent framework." in result
         assert "2. GitHub - AG2" in result
         assert "https://github.com/ag2ai/ag2" in result
-        mock_client.text.assert_called_once_with("AG2 framework", region="wt-wt", safesearch="moderate", max_results=5)
+        mock_client.text.assert_called_once_with("AG2 framework", region="us-en", safesearch="moderate", max_results=5)
 
     async def test_search_empty_results(self) -> None:
         mock_client = MagicMock()

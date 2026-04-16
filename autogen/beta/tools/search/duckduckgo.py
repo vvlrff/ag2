@@ -24,7 +24,7 @@ class DuckDuckGoSearchTool(Tool):
     def __init__(
         self,
         max_results: int = 5,
-        region: str = "wt-wt",
+        region: str = "us-en",
         safesearch: str = "moderate",
         client: DDGS | None = None,
         name: str = "duckduckgo_search",
