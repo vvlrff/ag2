@@ -34,8 +34,8 @@ def _make_config(query: str, final_reply: str = "done") -> TestConfig:
     )
 
 
+@pytest.mark.asyncio
 class TestSchema:
-    @pytest.mark.asyncio
     async def test_schema_has_query_param(self, context: ConversationContext) -> None:
         ddg = DuckDuckGoSearchTool(client=MagicMock())
 
@@ -47,7 +47,6 @@ class TestSchema:
         assert params["properties"]["query"]["type"] == "string"
         assert "query" in params["required"]
 
-    @pytest.mark.asyncio
     async def test_custom_name_and_description(self, context: ConversationContext) -> None:
         ddg = DuckDuckGoSearchTool(client=MagicMock(), name="my_search", description="Custom search tool.")
 
@@ -57,9 +56,9 @@ class TestSchema:
         assert schema.function.description == "Custom search tool."
 
 
+@pytest.mark.asyncio
 class TestSearchExecution:
-    @pytest.mark.asyncio
-    async def test_search_returns_structured_results(self) -> None:
+    async def test_search_returns_formatted_string(self) -> None:
         mock_client = MagicMock()
         mock_client.text.return_value = SAMPLE_RESULTS
 
@@ -68,18 +67,19 @@ class TestSearchExecution:
 
         tool_results: list[str] = []
         stream = MemoryStream()
-        stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
+        stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(e.result.content))
 
         await agent.ask("search", stream=stream)
 
         assert tool_results
         result = tool_results[0]
-        assert "AG2 Framework" in result
+        assert "1. AG2 Framework" in result
         assert "https://ag2.ai" in result
         assert "AG2 is an agent framework." in result
+        assert "2. GitHub - AG2" in result
+        assert "https://github.com/ag2ai/ag2" in result
         mock_client.text.assert_called_once_with("AG2 framework", region="wt-wt", safesearch="moderate", max_results=5)
 
-    @pytest.mark.asyncio
     async def test_search_empty_results(self) -> None:
         mock_client = MagicMock()
         mock_client.text.return_value = []
@@ -89,14 +89,13 @@ class TestSearchExecution:
 
         tool_results: list[str] = []
         stream = MemoryStream()
-        stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
+        stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(e.result.content))
 
         await agent.ask("search", stream=stream)
 
         assert tool_results
-        assert "[]" in tool_results[0]
+        assert tool_results[0] == "No results found."
 
-    @pytest.mark.asyncio
     async def test_custom_client_used(self) -> None:
         mock_client = MagicMock()
         mock_client.text.return_value = SAMPLE_RESULTS
@@ -108,7 +107,6 @@ class TestSearchExecution:
 
         mock_client.text.assert_called_once_with("test query", region="us-en", safesearch="off", max_results=3)
 
-    @pytest.mark.asyncio
     async def test_custom_tool_name_in_agent(self) -> None:
         mock_client = MagicMock()
         mock_client.text.return_value = SAMPLE_RESULTS
@@ -127,9 +125,9 @@ class TestSearchExecution:
 
         tool_results: list[str] = []
         stream = MemoryStream()
-        stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(str(e.result)))
+        stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(e.result.content))
 
         await agent.ask("search", stream=stream)
 
         assert tool_results
-        assert "AG2 Framework" in tool_results[0]
+        assert "1. AG2 Framework" in tool_results[0]

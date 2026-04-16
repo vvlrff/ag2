@@ -7,8 +7,7 @@ from contextlib import ExitStack
 from typing import TYPE_CHECKING, Annotated
 
 from ddgs.ddgs import DDGS
-from pydantic import Field, TypeAdapter
-from typing_extensions import TypedDict
+from pydantic import Field
 
 from autogen.beta.middleware import BaseMiddleware, ToolMiddleware
 from autogen.beta.tools.final import tool
@@ -19,41 +18,7 @@ if TYPE_CHECKING:
     from autogen.beta.annotations import Context
 
 
-class DuckDuckGoResult(TypedDict):
-    """A single DuckDuckGo search result."""
-
-    title: str
-    """The title of the search result."""
-    href: str
-    """The URL of the search result."""
-    body: str
-    """The body/snippet of the search result."""
-
-
-_result_adapter = TypeAdapter(list[DuckDuckGoResult])
-
-
 class DuckDuckGoSearchTool(Tool):
-    """Client-side web search via DuckDuckGo.
-
-    Works with any LLM provider. Does not require an API key.
-
-    Requires ``pip install "ag2[duckduckgo]"``.
-
-    Examples::
-
-        ddg = DuckDuckGoSearchTool()
-        agent = Agent("researcher", config=config, tools=[ddg])
-
-        # With configuration
-        ddg = DuckDuckGoSearchTool(max_results=10, region="us-en")
-
-        # With custom DDGS client (e.g. proxy)
-        from ddgs.ddgs import DDGS
-
-        ddg = DuckDuckGoSearchTool(client=DDGS(proxy="socks5://..."))
-    """
-
     __slots__ = ("_tool", "name")
 
     def __init__(
@@ -71,7 +36,7 @@ class DuckDuckGoSearchTool(Tool):
 
         def duckduckgo_search(
             query: Annotated[str, Field(description="The search query string.")],
-        ) -> list[DuckDuckGoResult]:
+        ) -> str:
             """Search the web using DuckDuckGo and return results."""
             results = _client.text(
                 query,
@@ -79,7 +44,12 @@ class DuckDuckGoSearchTool(Tool):
                 safesearch=safesearch,
                 max_results=max_results,
             )
-            return _result_adapter.validate_python(results)
+            if not results:
+                return "No results found."
+            lines = []
+            for i, r in enumerate(results, 1):
+                lines.append(f"{i}. {r['title']}\n   {r['href']}\n   {r['body']}")
+            return "\n\n".join(lines)
 
         self._tool: FunctionTool = tool(
             duckduckgo_search,
