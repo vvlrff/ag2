@@ -7,7 +7,15 @@ import json
 from collections.abc import Iterable
 from typing import Any
 
-from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
+from autogen.beta.events import (
+    BaseEvent,
+    BuiltinToolCallEvent,
+    BuiltinToolResultEvent,
+    ModelRequest,
+    ModelResponse,
+    TextInput,
+    ToolResultsEvent,
+)
 from autogen.beta.events.input_events import (
     BinaryInput,
     BinaryType,
@@ -137,8 +145,12 @@ def tool_to_api(t: ToolSchema) -> dict[str, Any]:
         return {"type": t.version, "name": "memory"}
 
     elif isinstance(t, ShellToolSchema):
-        # https://platform.claude.com/docs/en/agents-and-tools/tool-use/bash-tool
-        return {"type": t.version, "name": "bash"}
+        # Anthropic's bash tool is client-side — it ships a typed schema but the
+        # application must execute the command itself and return a tool_result.
+        # autogen/beta does not provide a default executor for this here.
+        # Use LocalShellTool (tools/shell/) instead, which runs commands via subprocess
+        # and works with any provider.
+        raise UnsupportedToolError(t.type, "anthropic")
 
     elif isinstance(t, SkillsToolSchema):
         # Skills are handled via the container parameter, not the tools[] array.
@@ -282,6 +294,25 @@ def convert_messages(
                 for r in message.results
             ]
             result.append({"role": "user", "content": tool_results})
+
+        elif isinstance(message, BuiltinToolCallEvent):
+            block = {
+                "type": "server_tool_use",
+                "id": message.id,
+                "name": message.name,
+                "input": json.loads(message.arguments or "{}"),
+            }
+            if result and result[-1].get("role") == "assistant":
+                result[-1]["content"].append(block)
+            else:
+                result.append({"role": "assistant", "content": [block]})
+
+        elif isinstance(message, BuiltinToolResultEvent):
+            block = message.result.content if isinstance(message.result.content, dict) else {}
+            if result and result[-1].get("role") == "assistant":
+                result[-1]["content"].append(block)
+            else:
+                result.append({"role": "assistant", "content": [block]})
 
     return result
 

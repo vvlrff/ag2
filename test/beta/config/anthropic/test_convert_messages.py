@@ -14,6 +14,8 @@ from autogen.beta.events import (
     AudioUrlInput,
     BinaryInput,
     BinaryType,
+    BuiltinToolCallEvent,
+    BuiltinToolResultEvent,
     DocumentInput,
     DocumentUrlInput,
     FileIdInput,
@@ -29,6 +31,7 @@ from autogen.beta.events import (
     VideoInput,
     VideoUrlInput,
 )
+from autogen.beta.events.types import ModelMessage
 from autogen.beta.exceptions import UnsupportedInputError
 
 
@@ -301,3 +304,137 @@ class TestUnsupportedInputs:
             convert_messages([
                 ModelRequest([BinaryInput(data=b"\x00", media_type="application/octet-stream", kind=BinaryType.BINARY)])
             ])
+
+
+class TestBuiltinToolCallEvent:
+    def test_creates_assistant_message_with_server_tool_use(self) -> None:
+        result = convert_messages([
+            BuiltinToolCallEvent(id="stu_1", name="web_search", arguments='{"query": "bitcoin price"}'),
+        ])
+
+        assert result == [
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "server_tool_use",
+                        "id": "stu_1",
+                        "name": "web_search",
+                        "input": {"query": "bitcoin price"},
+                    }
+                ],
+            }
+        ]
+
+    def test_appends_to_existing_assistant_message(self) -> None:
+        result = convert_messages([
+            ModelResponse(message=ModelMessage("Let me search for that."), tool_calls=ToolCallsEvent()),
+            BuiltinToolCallEvent(id="stu_1", name="web_search", arguments='{"query": "test"}'),
+        ])
+
+        assert result == [
+            {
+                "role": "assistant",
+                "content": [
+                    {"type": "text", "text": "Let me search for that."},
+                    {
+                        "type": "server_tool_use",
+                        "id": "stu_1",
+                        "name": "web_search",
+                        "input": {"query": "test"},
+                    },
+                ],
+            }
+        ]
+
+    def test_empty_arguments(self) -> None:
+        result = convert_messages([
+            BuiltinToolCallEvent(id="stu_1", name="web_search", arguments=""),
+        ])
+
+        assert result == [
+            {
+                "role": "assistant",
+                "content": [{"type": "server_tool_use", "id": "stu_1", "name": "web_search", "input": {}}],
+            }
+        ]
+
+
+class TestBuiltinToolResultEvent:
+    def test_creates_assistant_message(self) -> None:
+        result_data = {
+            "type": "web_search_tool_result",
+            "tool_use_id": "stu_1",
+            "content": [{"title": "Bitcoin", "url": "https://example.com"}],
+        }
+        result = convert_messages([
+            BuiltinToolResultEvent(
+                parent_id="stu_1",
+                name="web_search",
+                result=ToolResult(content=result_data),
+            ),
+        ])
+
+        assert result == [{"role": "assistant", "content": [result_data]}]
+
+    def test_appends_to_existing_assistant_message(self) -> None:
+        result_data = {"type": "web_search_tool_result", "tool_use_id": "stu_1", "content": []}
+        result = convert_messages([
+            BuiltinToolCallEvent(id="stu_1", name="web_search", arguments='{"query": "test"}'),
+            BuiltinToolResultEvent(
+                parent_id="stu_1",
+                name="web_search",
+                result=ToolResult(content=result_data),
+            ),
+        ])
+
+        assert result == [
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "server_tool_use",
+                        "id": "stu_1",
+                        "name": "web_search",
+                        "input": {"query": "test"},
+                    },
+                    result_data,
+                ],
+            }
+        ]
+
+
+def test_builtin_tool_full_sequence_round_trip() -> None:
+    """ModelRequest -> BuiltinToolCall -> BuiltinToolResult -> ModelResponse -> ModelRequest."""
+    result_data = {"type": "web_search_tool_result", "tool_use_id": "stu_1", "content": []}
+    events = [
+        ModelRequest([TextInput("Search for bitcoin price")]),
+        BuiltinToolCallEvent(id="stu_1", name="web_search", arguments='{"query": "bitcoin"}'),
+        BuiltinToolResultEvent(
+            parent_id="stu_1",
+            name="web_search",
+            result=ToolResult(content=result_data),
+        ),
+        ModelResponse(message=ModelMessage("Bitcoin is $74,000."), tool_calls=ToolCallsEvent()),
+        ModelRequest([TextInput("What was the exact price?")]),
+    ]
+
+    result = convert_messages(events)
+
+    assert result == [
+        {"role": "user", "content": [{"type": "text", "text": "Search for bitcoin price"}]},
+        {
+            "role": "assistant",
+            "content": [
+                {
+                    "type": "server_tool_use",
+                    "id": "stu_1",
+                    "name": "web_search",
+                    "input": {"query": "bitcoin"},
+                },
+                result_data,
+            ],
+        },
+        {"role": "assistant", "content": [{"type": "text", "text": "Bitcoin is $74,000."}]},
+        {"role": "user", "content": [{"type": "text", "text": "What was the exact price?"}]},
+    ]

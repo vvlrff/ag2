@@ -10,16 +10,25 @@ from typing import Any, TypedDict
 import httpx
 from anthropic import NOT_GIVEN, AsyncAnthropic
 from anthropic.types import (
+    BashCodeExecutionToolResultBlock,
+    CodeExecutionToolResultBlock,
     Message,
+    ServerToolUseBlock,
     TextBlock,
+    TextEditorCodeExecutionToolResultBlock,
     ThinkingBlock,
+    ToolSearchToolResultBlock,
     ToolUseBlock,
+    WebFetchToolResultBlock,
+    WebSearchToolResultBlock,
 )
 
 from autogen.beta.config.client import LLMClient
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
     BaseEvent,
+    BuiltinToolCallEvent,
+    BuiltinToolResultEvent,
     ModelMessage,
     ModelMessageChunk,
     ModelReasoning,
@@ -27,6 +36,7 @@ from autogen.beta.events import (
     ToolCallEvent,
     ToolCallsEvent,
 )
+from autogen.beta.events.tool_events import ToolResult
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.skills import SkillsToolSchema
@@ -39,6 +49,15 @@ from .mappers import (
     normalize_usage,
     response_proto_to_output_config,
     tool_to_api,
+)
+
+_SERVER_TOOL_RESULT_BLOCK_TYPES = (
+    WebSearchToolResultBlock,
+    WebFetchToolResultBlock,
+    CodeExecutionToolResultBlock,
+    BashCodeExecutionToolResultBlock,
+    TextEditorCodeExecutionToolResultBlock,
+    ToolSearchToolResultBlock,
 )
 
 
@@ -163,11 +182,36 @@ class AnthropicClient(LLMClient):
             for _ in range(max_continuations):
                 if response.stop_reason != "pause_turn":
                     break
+                await self._emit_builtin_tool_events(response.content, context)
                 anthropic_messages.append({"role": "assistant", "content": response.content})
                 create_kwargs["messages"] = anthropic_messages
                 response = await self._client.messages.create(**create_kwargs)
 
             return await self._process_response(response, context)
+
+    async def _emit_builtin_tool_events(
+        self,
+        content_blocks: list[Any],
+        context: "ConversationContext",
+    ) -> None:
+        """Emit BuiltinToolCallEvent/BuiltinToolResultEvent for server-side tool blocks."""
+        for block in content_blocks:
+            if isinstance(block, ServerToolUseBlock):
+                await context.send(
+                    BuiltinToolCallEvent(
+                        id=block.id,
+                        name=block.name,
+                        arguments=json.dumps(block.input),
+                    )
+                )
+            elif isinstance(block, _SERVER_TOOL_RESULT_BLOCK_TYPES):
+                await context.send(
+                    BuiltinToolResultEvent(
+                        parent_id=block.tool_use_id,
+                        name=block.type.replace("_tool_result", ""),
+                        result=ToolResult(content=block.model_dump(exclude_none=True)),
+                    )
+                )
 
     def _build_system(self, prompt: Iterable[str]) -> Any:
         text = "\n".join(prompt)
@@ -211,6 +255,24 @@ class AnthropicClient(LLMClient):
                     )
                 )
 
+            elif isinstance(block, ServerToolUseBlock):
+                await context.send(
+                    BuiltinToolCallEvent(
+                        id=block.id,
+                        name=block.name,
+                        arguments=json.dumps(block.input),
+                    )
+                )
+
+            elif isinstance(block, _SERVER_TOOL_RESULT_BLOCK_TYPES):
+                await context.send(
+                    BuiltinToolResultEvent(
+                        parent_id=block.tool_use_id,
+                        name=block.type.replace("_tool_result", ""),
+                        result=ToolResult(content=block.model_dump(exclude_none=True)),
+                    )
+                )
+
         model_msg: ModelMessage | None = None
         if text_parts:
             model_msg = ModelMessage("\n\n".join(text_parts))
@@ -242,12 +304,29 @@ class AnthropicClient(LLMClient):
 
             if event_type == "content_block_start":
                 block = event.content_block
-                if getattr(block, "type", None) == "tool_use":
+                block_type = getattr(block, "type", None)
+                if block_type == "tool_use":
                     current_tool = {
                         "id": block.id,
                         "name": block.name,
                         "arguments": "",
                     }
+                elif block_type == "server_tool_use":
+                    await context.send(
+                        BuiltinToolCallEvent(
+                            id=block.id,
+                            name=block.name,
+                            arguments=json.dumps(block.input),
+                        )
+                    )
+                elif block_type and block_type.endswith("_tool_result"):
+                    await context.send(
+                        BuiltinToolResultEvent(
+                            parent_id=block.tool_use_id,
+                            name=block_type.replace("_tool_result", ""),
+                            result=ToolResult(content=block.model_dump(exclude_none=True)),
+                        )
+                    )
 
             elif event_type == "content_block_delta":
                 delta = event.delta

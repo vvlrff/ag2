@@ -48,12 +48,12 @@ SHELL_TOOL_NAME = "shell"
 
 @dataclass(slots=True)
 class ShellToolSchema(ToolSchema):
-    """Provider-neutral capability flag for shell/bash execution.
+    """Provider-neutral capability flag for provider-executed shell.
 
-    Each provider mapper converts this into the appropriate API format:
-
-    - Anthropic: ``bash_20250124``
-    - OpenAI Responses API: ``shell`` (with optional ``environment``)
+    Currently only OpenAI Responses API executes shell server-side.
+    Anthropic's bash tool is client-side and is rejected with
+    :class:`~autogen.beta.exceptions.UnsupportedToolError` — use
+    :class:`~autogen.beta.tools.LocalShellTool` instead.
     """
 
     type: str = field(default=SHELL_TOOL_NAME, init=False)
@@ -62,21 +62,22 @@ class ShellToolSchema(ToolSchema):
 
 
 class ShellTool(Tool):
-    """Shell/bash execution tool.
+    """Shell execution tool — provider-executed server-side.
 
-    Provider-specific mapping:
+    Provider support:
 
-    - **Anthropic** — maps to ``bash_20250124``. Claude calls the tool with
-      a ``command`` or ``restart`` input; the application must execute it and
-      return the result (client-side tool).
-      ``environment`` is ignored for Anthropic.
+    - **OpenAI Responses API** — maps to ``shell``. Use ``environment`` to
+      control where commands execute: ``ContainerAutoEnvironment``,
+      ``ContainerReferenceEnvironment``.
 
-    - **OpenAI Responses API** — maps to ``shell`` (``gpt-5.4``).
-      Use ``environment`` to control where commands execute:
-      ``ContainerAutoEnvironment``, ``ContainerReferenceEnvironment``
+    - **Anthropic** — NOT supported. Claude's ``bash`` tool is a client-side
+      tool (the application must execute the command and return the result).
+      Using ``ShellTool`` with ``AnthropicConfig`` raises
+      :class:`~autogen.beta.exceptions.UnsupportedToolError`. Use
+      :class:`~autogen.beta.tools.LocalShellTool` instead, which runs
+      commands via subprocess and works with any provider.
 
     See:
-    - https://platform.claude.com/docs/en/agents-and-tools/tool-use/bash-tool
     - https://developers.openai.com/api/docs/guides/tools-shell
     """
 
