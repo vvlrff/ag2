@@ -12,7 +12,7 @@ from autogen.beta.context import ConversationContext
 from autogen.beta.events import ToolCallEvent, ToolCallsEvent, ToolResultEvent
 from autogen.beta.events.types import ModelResponse
 from autogen.beta.testing import TestConfig
-from autogen.beta.tools import DuckDuckGoSearchTool
+from autogen.beta.tools.search import DuckDuckGoSearchTool, SearchResponse, SearchResult
 
 SAMPLE_RESULTS = [
     {"title": "AG2 Framework", "href": "https://ag2.ai", "body": "AG2 is an agent framework."},
@@ -58,26 +58,28 @@ class TestSchema:
 
 @pytest.mark.asyncio
 class TestSearchExecution:
-    async def test_search_returns_formatted_string(self) -> None:
+    async def test_search_returns_structured_results(self) -> None:
         mock_client = MagicMock()
         mock_client.text.return_value = SAMPLE_RESULTS
 
         ddg = DuckDuckGoSearchTool(client=mock_client)
         agent = Agent("a", config=_make_config("AG2 framework"), tools=[ddg])
 
-        tool_results: list[str] = []
+        tool_results: list[SearchResponse] = []
         stream = MemoryStream()
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(e.result.content))
 
         await agent.ask("search", stream=stream)
 
-        assert tool_results
-        result = tool_results[0]
-        assert "1. AG2 Framework" in result
-        assert "https://ag2.ai" in result
-        assert "AG2 is an agent framework." in result
-        assert "2. GitHub - AG2" in result
-        assert "https://github.com/ag2ai/ag2" in result
+        assert tool_results == [
+            SearchResponse(
+                query="AG2 framework",
+                results=[
+                    SearchResult(title="AG2 Framework", url="https://ag2.ai", snippet="AG2 is an agent framework."),
+                    SearchResult(title="GitHub - AG2", url="https://github.com/ag2ai/ag2", snippet="Open source repo."),
+                ],
+            )
+        ]
         mock_client.text.assert_called_once_with("AG2 framework", region="us-en", safesearch="moderate", max_results=5)
 
     async def test_search_empty_results(self) -> None:
@@ -87,14 +89,13 @@ class TestSearchExecution:
         ddg = DuckDuckGoSearchTool(client=mock_client)
         agent = Agent("a", config=_make_config("nonexistent query"), tools=[ddg])
 
-        tool_results: list[str] = []
+        tool_results: list[SearchResponse] = []
         stream = MemoryStream()
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(e.result.content))
 
         await agent.ask("search", stream=stream)
 
-        assert tool_results
-        assert tool_results[0] == "No results found."
+        assert tool_results == [SearchResponse(query="nonexistent query", results=[])]
 
     async def test_custom_client_used(self) -> None:
         mock_client = MagicMock()
@@ -123,11 +124,18 @@ class TestSearchExecution:
         )
         agent = Agent("a", config=config, tools=[ddg])
 
-        tool_results: list[str] = []
+        tool_results: list[SearchResponse] = []
         stream = MemoryStream()
         stream.where(ToolResultEvent).subscribe(lambda e: tool_results.append(e.result.content))
 
         await agent.ask("search", stream=stream)
 
-        assert tool_results
-        assert "1. AG2 Framework" in tool_results[0]
+        assert tool_results == [
+            SearchResponse(
+                query="test",
+                results=[
+                    SearchResult(title="AG2 Framework", url="https://ag2.ai", snippet="AG2 is an agent framework."),
+                    SearchResult(title="GitHub - AG2", url="https://github.com/ag2ai/ag2", snippet="Open source repo."),
+                ],
+            )
+        ]

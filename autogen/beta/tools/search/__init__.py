@@ -15,8 +15,10 @@ def _missing_optional_dependency(name: str, extra: str, error: ImportError) -> M
 
 
 try:
-    from .duckduckgo import DuckDuckGoSearchTool
+    from .duckduckgo import DuckDuckGoSearchTool, SearchResponse, SearchResult
 except ImportError as e:
     DuckDuckGoSearchTool = _missing_optional_dependency("DuckDuckGoSearchTool", "ddgs", e)  # type: ignore[misc]
+    SearchResult = _missing_optional_dependency("SearchResult", "ddgs", e)  # type: ignore[misc]
+    SearchResponse = _missing_optional_dependency("SearchResponse", "ddgs", e)  # type: ignore[misc]
 
-__all__ = ("DuckDuckGoSearchTool",)
+__all__ = ("DuckDuckGoSearchTool", "SearchResponse", "SearchResult")

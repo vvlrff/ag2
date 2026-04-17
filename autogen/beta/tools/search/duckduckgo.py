@@ -4,18 +4,31 @@
 
 from collections.abc import Iterable
 from contextlib import ExitStack
-from typing import TYPE_CHECKING, Annotated
+from dataclasses import dataclass, field
+from typing import Annotated
 
 from ddgs.ddgs import DDGS
 from pydantic import Field
 
+from autogen.beta.annotations import Context, Variable
 from autogen.beta.middleware import BaseMiddleware, ToolMiddleware
+from autogen.beta.tools.builtin._resolve import resolve_variable
 from autogen.beta.tools.final import tool
 from autogen.beta.tools.final.function_tool import FunctionTool
 from autogen.beta.tools.tool import Tool
 
-if TYPE_CHECKING:
-    from autogen.beta.annotations import Context
+
+@dataclass(slots=True)
+class SearchResult:
+    title: str
+    url: str
+    snippet: str
+
+
+@dataclass(slots=True)
+class SearchResponse:
+    query: str
+    results: list[SearchResult] = field(default_factory=list)
 
 
 class DuckDuckGoSearchTool(Tool):
@@ -23,9 +36,9 @@ class DuckDuckGoSearchTool(Tool):
 
     def __init__(
         self,
-        max_results: int = 5,
-        region: str = "us-en",
-        safesearch: str = "moderate",
+        max_results: int | Variable | None = None,
+        region: str | Variable | None = None,
+        safesearch: str | Variable | None = None,
         client: DDGS | None = None,
         name: str = "duckduckgo_search",
         *,
@@ -33,23 +46,27 @@ class DuckDuckGoSearchTool(Tool):
         middleware: Iterable[ToolMiddleware] = (),
     ) -> None:
         _client = client if client is not None else DDGS()
+        _max_results = 5 if max_results is None else max_results
+        _region = "us-en" if region is None else region
+        _safesearch = "moderate" if safesearch is None else safesearch
 
         def duckduckgo_search(
             query: Annotated[str, Field(description="The search query string.")],
-        ) -> str:
-            """Search the web using DuckDuckGo and return results."""
-            results = _client.text(
+            ctx: Context,
+        ) -> SearchResponse:
+            """Search the web using DuckDuckGo and return structured results."""
+            resolved_max = resolve_variable(_max_results, ctx, param_name="max_results")
+            resolved_region = resolve_variable(_region, ctx, param_name="region")
+            resolved_safesearch = resolve_variable(_safesearch, ctx, param_name="safesearch")
+
+            raw = _client.text(
                 query,
-                region=region,
-                safesearch=safesearch,
-                max_results=max_results,
+                region=resolved_region,
+                safesearch=resolved_safesearch,
+                max_results=resolved_max,
             )
-            if not results:
-                return "No results found."
-            lines = []
-            for i, r in enumerate(results, 1):
-                lines.append(f"{i}. {r['title']}\n   {r['href']}\n   {r['body']}")
-            return "\n\n".join(lines)
+            items = [SearchResult(title=r["title"], url=r["href"], snippet=r["body"]) for r in (raw or [])]
+            return SearchResponse(query=query, results=items)
 
         self._tool: FunctionTool = tool(
             duckduckgo_search,
@@ -59,13 +76,13 @@ class DuckDuckGoSearchTool(Tool):
         )
         self.name = name
 
-    async def schemas(self, context: "Context") -> list:
+    async def schemas(self, context: Context) -> list:
         return await self._tool.schemas(context)
 
     def register(
         self,
         stack: ExitStack,
-        context: "Context",
+        context: Context,
         *,
         middleware: Iterable[BaseMiddleware] = (),
     ) -> None:
