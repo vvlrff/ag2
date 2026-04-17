@@ -7,18 +7,14 @@ import pytest
 from autogen.beta.config.gemini.mappers import convert_messages
 from autogen.beta.events import (
     AudioInput,
-    AudioUrlInput,
     BinaryInput,
     DocumentInput,
-    DocumentUrlInput,
     FileIdInput,
     ImageInput,
-    ImageUrlInput,
     ModelRequest,
     ModelResponse,
     TextInput,
     VideoInput,
-    VideoUrlInput,
 )
 from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent
 
@@ -55,7 +51,7 @@ class TestImageUrlInput:
     IMAGE_URL = "https://example.com/image.png"
 
     def test_converts_to_part_from_uri(self) -> None:
-        result = convert_messages([ModelRequest([ImageUrlInput(url=self.IMAGE_URL)])])
+        result = convert_messages([ModelRequest([ImageInput(url=self.IMAGE_URL)])])
 
         assert len(result) == 1
         assert result[0].role == "user"
@@ -80,7 +76,7 @@ class TestAudioUrlInput:
     AUDIO_URL = "https://example.com/audio.wav"
 
     def test_converts_to_part_from_uri(self) -> None:
-        result = convert_messages([ModelRequest([AudioUrlInput(url=self.AUDIO_URL)])])
+        result = convert_messages([ModelRequest([AudioInput(url=self.AUDIO_URL)])])
 
         assert len(result) == 1
         part = result[0].parts[0]
@@ -103,7 +99,7 @@ class TestDocumentUrlInput:
     DOC_URL = "https://example.com/doc.pdf"
 
     def test_converts_to_part_from_uri(self) -> None:
-        result = convert_messages([ModelRequest([DocumentUrlInput(url=self.DOC_URL)])])
+        result = convert_messages([ModelRequest([DocumentInput(url=self.DOC_URL)])])
 
         part = result[0].parts[0]
         assert part.file_data.file_uri == self.DOC_URL
@@ -125,7 +121,7 @@ class TestVideoUrlInput:
     VIDEO_URL = "https://example.com/clip.mp4"
 
     def test_converts_to_part_from_uri(self) -> None:
-        result = convert_messages([ModelRequest([VideoUrlInput(url=self.VIDEO_URL)])])
+        result = convert_messages([ModelRequest([VideoInput(url=self.VIDEO_URL)])])
 
         part = result[0].parts[0]
         assert part.file_data.file_uri == self.VIDEO_URL
@@ -133,7 +129,7 @@ class TestVideoUrlInput:
 
     def test_youtube_url_has_no_mime_type(self) -> None:
         url = "https://www.youtube.com/watch?v=dQw4w9WgXcQ"
-        result = convert_messages([ModelRequest([VideoUrlInput(url=url)])])
+        result = convert_messages([ModelRequest([VideoInput(url=url)])])
 
         part = result[0].parts[0]
         assert part.file_data.file_uri == url
@@ -225,8 +221,8 @@ class TestMultipleInputs:
         result = convert_messages([
             ModelRequest([
                 TextInput("Describe these images."),
-                ImageUrlInput(url="https://example.com/a.png"),
-                ImageUrlInput(url="https://example.com/b.jpg"),
+                ImageInput(url="https://example.com/a.png"),
+                ImageInput(url="https://example.com/b.jpg"),
             ])
         ])
 

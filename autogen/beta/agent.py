@@ -71,6 +71,9 @@ class AgentReply(Generic[TResult, TAgent]):
         self.__provider = provider
         self.__schema = response_schema
 
+    def __repr__(self) -> str:
+        return f"{self.__class__.__name__}({self.response}, context={self.context})"
+
     async def content(
         self,
         *,
@@ -498,8 +501,7 @@ class Agent(Generic[TResult]):
     @overload
     async def ask(
         self,
-        msg: str | Input,
-        *,
+        *msg: str | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
@@ -515,8 +517,7 @@ class Agent(Generic[TResult]):
     @overload
     async def ask(
         self,
-        msg: str | Input,
-        *,
+        *msg: str | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
@@ -532,8 +533,7 @@ class Agent(Generic[TResult]):
     @overload
     async def ask(
         self,
-        msg: str | Input,
-        *,
+        *msg: str | Input,
         stream: Stream | None = ...,
         dependencies: dict[Any, Any] | None = ...,
         variables: dict[Any, Any] | None = ...,
