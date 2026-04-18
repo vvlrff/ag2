@@ -9,6 +9,8 @@ from typing import Any
 
 from autogen.beta.events import (
     BaseEvent,
+    BuiltinToolCallEvent,
+    BuiltinToolResultEvent,
     ModelRequest,
     ModelResponse,
     TextInput,
@@ -237,6 +239,26 @@ def convert_messages(
                 })
             if content:
                 result.append({"role": "assistant", "content": content})
+
+        elif isinstance(message, BuiltinToolCallEvent):
+            provider_name = message.provider_data.get("provider_name", message.name)
+            block = {
+                "type": "server_tool_use",
+                "id": message.id,
+                "name": provider_name,
+                "input": json.loads(message.arguments or "{}"),
+            }
+            if result and result[-1]["role"] == "assistant":
+                result[-1]["content"].append(block)
+            else:
+                result.append({"role": "assistant", "content": [block]})
+
+        elif isinstance(message, BuiltinToolResultEvent):
+            block = message.result.content
+            if result and result[-1]["role"] == "assistant":
+                result[-1]["content"].append(block)
+            else:
+                result.append({"role": "assistant", "content": [block]})
 
         elif isinstance(message, ToolResultsEvent):
             tool_results = [

@@ -434,3 +434,112 @@ def test_builtin_tool_full_sequence_round_trip() -> None:
         {"role": "assistant", "content": [{"type": "text", "text": "Bitcoin is $74,000."}]},
         {"role": "user", "content": [{"type": "text", "text": "What was the exact price?"}]},
     ]
+
+
+class TestCodeExecutionRoundTrip:
+    """Anthropic's code_execution emits sub-tool names. After the client normalizes
+    BuiltinToolCallEvent.name to "code_execution" (with original in provider_data),
+    convert_messages must restore the provider name when sending history back."""
+
+    def test_bash_code_execution_preserves_provider_name(self) -> None:
+        result_data = {
+            "type": "bash_code_execution_tool_result",
+            "tool_use_id": "stu_1",
+            "content": {"type": "bash_code_execution_result", "stdout": "hello\n", "stderr": "", "return_code": 0},
+        }
+        events = [
+            ModelRequest([TextInput("Run echo hello")]),
+            BuiltinToolCallEvent(
+                id="stu_1",
+                name="code_execution",
+                arguments='{"command": "echo hello"}',
+                provider_data={"provider_name": "bash_code_execution"},
+            ),
+            BuiltinToolResultEvent(
+                parent_id="stu_1",
+                name="code_execution",
+                result=ToolResult(content=result_data),
+            ),
+            ModelResponse(message=ModelMessage("Output: hello"), tool_calls=ToolCallsEvent()),
+            ModelRequest([TextInput("Now run pwd")]),
+        ]
+
+        result = convert_messages(events)
+
+        assert result == [
+            {"role": "user", "content": [{"type": "text", "text": "Run echo hello"}]},
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "server_tool_use",
+                        "id": "stu_1",
+                        "name": "bash_code_execution",
+                        "input": {"command": "echo hello"},
+                    },
+                    result_data,
+                ],
+            },
+            {"role": "assistant", "content": [{"type": "text", "text": "Output: hello"}]},
+            {"role": "user", "content": [{"type": "text", "text": "Now run pwd"}]},
+        ]
+
+    def test_text_editor_code_execution_preserves_provider_name(self) -> None:
+        result_data = {
+            "type": "text_editor_code_execution_tool_result",
+            "tool_use_id": "stu_2",
+            "content": {"type": "text_editor_code_execution_view_result", "content": "file contents"},
+        }
+        events = [
+            BuiltinToolCallEvent(
+                id="stu_2",
+                name="code_execution",
+                arguments='{"command": "view", "path": "/a.txt"}',
+                provider_data={"provider_name": "text_editor_code_execution"},
+            ),
+            BuiltinToolResultEvent(
+                parent_id="stu_2",
+                name="code_execution",
+                result=ToolResult(content=result_data),
+            ),
+        ]
+
+        result = convert_messages(events)
+
+        assert result == [
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "server_tool_use",
+                        "id": "stu_2",
+                        "name": "text_editor_code_execution",
+                        "input": {"command": "view", "path": "/a.txt"},
+                    },
+                    result_data,
+                ],
+            }
+        ]
+
+    def test_missing_provider_data_falls_back_to_event_name(self) -> None:
+        """Non-Anthropic sources (e.g. a user replaying history) may omit provider_data.
+        The mapper must not crash — it should use the event name as-is."""
+        events = [
+            BuiltinToolCallEvent(id="stu_3", name="web_search", arguments='{"query": "x"}'),
+        ]
+
+        result = convert_messages(events)
+
+        assert result == [
+            {
+                "role": "assistant",
+                "content": [
+                    {
+                        "type": "server_tool_use",
+                        "id": "stu_3",
+                        "name": "web_search",
+                        "input": {"query": "x"},
+                    }
+                ],
+            }
+        ]

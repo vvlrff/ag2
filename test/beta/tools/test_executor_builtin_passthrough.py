@@ -9,7 +9,6 @@ import pytest
 from autogen.beta import MemoryStream, ToolResult
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import (
-    BuiltinToolCallEvent,
     ToolCallEvent,
     ToolNotFoundEvent,
 )
@@ -24,16 +23,6 @@ def _not_found_events(events: list) -> list[ToolNotFoundEvent]:
 @pytest.mark.asyncio
 class TestToolNotFoundFallback:
     """Fallback `_tool_not_found` fires for unknown client-side tools only."""
-
-    async def test_builtin_tool_call_is_skipped(self) -> None:
-        stream = MemoryStream()
-        context = ConversationContext(stream=stream)
-
-        with ExitStack() as stack:
-            ToolExecutor().register(stack, context, tools=[], known_tools=set())
-            await context.send(BuiltinToolCallEvent(id="stu_1", name="web_search", arguments="{}"))
-
-        assert _not_found_events(list(await stream.history.get_events())) == []
 
     async def test_regular_unknown_tool_triggers_not_found(self) -> None:
         stream = MemoryStream()

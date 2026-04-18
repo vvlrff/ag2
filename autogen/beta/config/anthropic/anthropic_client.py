@@ -60,6 +60,15 @@ _SERVER_TOOL_RESULT_BLOCK_TYPES = (
     ToolSearchToolResultBlock,
 )
 
+_PROVIDER_TO_TOOL_NAME = {
+    "bash_code_execution": "code_execution",
+    "text_editor_code_execution": "code_execution",
+}
+
+
+def _normalize_tool_name(provider_name: str) -> str:
+    return _PROVIDER_TO_TOOL_NAME.get(provider_name, provider_name)
+
 
 class CreateOptions(TypedDict, total=False):
     model: str
@@ -200,15 +209,16 @@ class AnthropicClient(LLMClient):
                 await context.send(
                     BuiltinToolCallEvent(
                         id=block.id,
-                        name=block.name,
+                        name=_normalize_tool_name(block.name),
                         arguments=json.dumps(block.input),
+                        provider_data={"provider_name": block.name},
                     )
                 )
             elif isinstance(block, _SERVER_TOOL_RESULT_BLOCK_TYPES):
                 await context.send(
                     BuiltinToolResultEvent(
                         parent_id=block.tool_use_id,
-                        name=block.type.replace("_tool_result", ""),
+                        name=_normalize_tool_name(block.type.replace("_tool_result", "")),
                         result=ToolResult(content=block.model_dump(exclude_none=True)),
                     )
                 )
@@ -259,8 +269,9 @@ class AnthropicClient(LLMClient):
                 await context.send(
                     BuiltinToolCallEvent(
                         id=block.id,
-                        name=block.name,
+                        name=_normalize_tool_name(block.name),
                         arguments=json.dumps(block.input),
+                        provider_data={"provider_name": block.name},
                     )
                 )
 
@@ -268,7 +279,7 @@ class AnthropicClient(LLMClient):
                 await context.send(
                     BuiltinToolResultEvent(
                         parent_id=block.tool_use_id,
-                        name=block.type.replace("_tool_result", ""),
+                        name=_normalize_tool_name(block.type.replace("_tool_result", "")),
                         result=ToolResult(content=block.model_dump(exclude_none=True)),
                     )
                 )
@@ -315,15 +326,16 @@ class AnthropicClient(LLMClient):
                     await context.send(
                         BuiltinToolCallEvent(
                             id=block.id,
-                            name=block.name,
+                            name=_normalize_tool_name(block.name),
                             arguments=json.dumps(block.input),
+                            provider_data={"provider_name": block.name},
                         )
                     )
                 elif block_type and block_type.endswith("_tool_result"):
                     await context.send(
                         BuiltinToolResultEvent(
                             parent_id=block.tool_use_id,
-                            name=block_type.replace("_tool_result", ""),
+                            name=_normalize_tool_name(block_type.replace("_tool_result", "")),
                             result=ToolResult(content=block.model_dump(exclude_none=True)),
                         )
                     )

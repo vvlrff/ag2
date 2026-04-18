@@ -6,11 +6,15 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from anthropic.types import (
+    BashCodeExecutionToolResultBlock,
     ServerToolUseBlock,
     TextBlock,
+    TextEditorCodeExecutionToolResultBlock,
     ToolUseBlock,
     WebSearchToolResultBlock,
 )
+from anthropic.types.bash_code_execution_tool_result_error import BashCodeExecutionToolResultError
+from anthropic.types.text_editor_code_execution_tool_result_error import TextEditorCodeExecutionToolResultError
 from anthropic.types.web_search_result_block import WebSearchResultBlock
 
 from autogen.beta.config.anthropic.anthropic_client import AnthropicClient
@@ -189,3 +193,145 @@ class TestEmitBuiltinToolEvents:
         await client._emit_builtin_tool_events(blocks, ctx)
 
         ctx.send.assert_not_called()
+
+
+@pytest.mark.asyncio
+class TestCodeExecutionSubToolNormalization:
+    """Anthropic's code_execution returns sub-tool names in server_tool_use
+    (`bash_code_execution`, `text_editor_code_execution`). Event.name must be the
+    declared tool name (`code_execution`); the raw provider name lives in provider_data.
+    `provider_data` has compare=False so it's verified on a separate line.
+    """
+
+    async def test_bash_code_execution_call_is_normalized(self) -> None:
+        client = _make_client()
+        ctx = _make_context()
+
+        await client._emit_builtin_tool_events(
+            [
+                ServerToolUseBlock(
+                    id="stu_1",
+                    name="bash_code_execution",
+                    input={"command": "ls"},
+                    type="server_tool_use",
+                ),
+            ],
+            ctx,
+        )
+
+        events = _sent_events(ctx)
+        assert events == [
+            BuiltinToolCallEvent(id="stu_1", name="code_execution", arguments='{"command": "ls"}'),
+        ]
+        assert events[0].provider_data == {"provider_name": "bash_code_execution"}
+
+    async def test_text_editor_code_execution_call_is_normalized(self) -> None:
+        client = _make_client()
+        ctx = _make_context()
+
+        await client._emit_builtin_tool_events(
+            [
+                ServerToolUseBlock(
+                    id="stu_2",
+                    name="text_editor_code_execution",
+                    input={"command": "view", "path": "/a"},
+                    type="server_tool_use",
+                ),
+            ],
+            ctx,
+        )
+
+        events = _sent_events(ctx)
+        assert events == [
+            BuiltinToolCallEvent(
+                id="stu_2",
+                name="code_execution",
+                arguments='{"command": "view", "path": "/a"}',
+            ),
+        ]
+        assert events[0].provider_data == {"provider_name": "text_editor_code_execution"}
+
+    async def test_bash_code_execution_result_is_normalized(self) -> None:
+        client = _make_client()
+        ctx = _make_context()
+
+        await client._emit_builtin_tool_events(
+            [
+                BashCodeExecutionToolResultBlock(
+                    tool_use_id="stu_1",
+                    type="bash_code_execution_tool_result",
+                    content=BashCodeExecutionToolResultError(
+                        error_code="unavailable",
+                        type="bash_code_execution_tool_result_error",
+                    ),
+                ),
+            ],
+            ctx,
+        )
+
+        # Key order matches BashCodeExecutionToolResultBlock.model_dump() output
+        expected_content = {
+            "content": {
+                "error_code": "unavailable",
+                "type": "bash_code_execution_tool_result_error",
+            },
+            "tool_use_id": "stu_1",
+            "type": "bash_code_execution_tool_result",
+        }
+        assert _sent_events(ctx) == [
+            BuiltinToolResultEvent(
+                parent_id="stu_1",
+                name="code_execution",
+                result=ToolResult(content=expected_content),
+            ),
+        ]
+
+    async def test_text_editor_code_execution_result_is_normalized(self) -> None:
+        client = _make_client()
+        ctx = _make_context()
+
+        await client._emit_builtin_tool_events(
+            [
+                TextEditorCodeExecutionToolResultBlock(
+                    tool_use_id="stu_2",
+                    type="text_editor_code_execution_tool_result",
+                    content=TextEditorCodeExecutionToolResultError(
+                        error_code="file_not_found",
+                        type="text_editor_code_execution_tool_result_error",
+                    ),
+                ),
+            ],
+            ctx,
+        )
+
+        # Key order matches TextEditorCodeExecutionToolResultBlock.model_dump() output
+        expected_content = {
+            "content": {
+                "error_code": "file_not_found",
+                "type": "text_editor_code_execution_tool_result_error",
+            },
+            "tool_use_id": "stu_2",
+            "type": "text_editor_code_execution_tool_result",
+        }
+        assert _sent_events(ctx) == [
+            BuiltinToolResultEvent(
+                parent_id="stu_2",
+                name="code_execution",
+                result=ToolResult(content=expected_content),
+            ),
+        ]
+
+    async def test_web_search_name_is_not_normalized(self) -> None:
+        client = _make_client()
+        ctx = _make_context()
+
+        await client._emit_builtin_tool_events(
+            [ServerToolUseBlock(id="stu_3", name="web_search", input={"q": "x"}, type="server_tool_use")],
+            ctx,
+        )
+
+        events = _sent_events(ctx)
+        assert events == [
+            BuiltinToolCallEvent(id="stu_3", name="web_search", arguments='{"q": "x"}'),
+        ]
+        assert events[0].provider_data == {"provider_name": "web_search"}
