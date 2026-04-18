@@ -9,7 +9,6 @@ from typing import Any
 
 from autogen.beta.annotations import Context
 from autogen.beta.events import (
-    BuiltinToolCallEvent,
     ClientToolCallEvent,
     ModelMessage,
     ModelResponse,
@@ -20,7 +19,6 @@ from autogen.beta.events import (
     ToolResultEvent,
     ToolResultsEvent,
 )
-from autogen.beta.events.conditions import TypeCondition
 from autogen.beta.exceptions import ToolNotFoundError
 from autogen.beta.middleware import BaseMiddleware
 
@@ -42,11 +40,9 @@ class ToolExecutor:
         for tool in tools:
             tool.register(stack, context, middleware=middleware)
 
-        # fallback subscriber to raise NotFound event (skip server-side builtin tools)
+        # fallback subscriber to raise NotFound event
         stack.enter_context(
-            context.stream.where(TypeCondition(ToolCallEvent) & BuiltinToolCallEvent.not_()).sub_scope(
-                _tool_not_found(known_tools)
-            ),
+            context.stream.where(ToolCallEvent).sub_scope(_tool_not_found(known_tools)),
         )
 
     async def execute_tools(self, event: ToolCallsEvent, context: Context) -> None:
@@ -66,7 +62,10 @@ class ToolExecutor:
                     if result.final:
                         await context.send(
                             ModelResponse(
-                                message=ModelMessage(ev.content),
+                                message=ModelMessage(
+                                    ev.content,
+                                    metadata=result.metadata,
+                                ),
                                 response_force=True,
                             )
                         )
