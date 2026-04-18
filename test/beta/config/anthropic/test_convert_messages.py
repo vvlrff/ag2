@@ -11,16 +11,13 @@ from autogen.beta import ToolResult
 from autogen.beta.config.anthropic.mappers import convert_messages
 from autogen.beta.events import (
     AudioInput,
-    AudioUrlInput,
     BinaryInput,
     BinaryType,
     BuiltinToolCallEvent,
     BuiltinToolResultEvent,
     DocumentInput,
-    DocumentUrlInput,
     FileIdInput,
     ImageInput,
-    ImageUrlInput,
     ModelRequest,
     ModelResponse,
     TextInput,
@@ -29,7 +26,6 @@ from autogen.beta.events import (
     ToolResultEvent,
     ToolResultsEvent,
     VideoInput,
-    VideoUrlInput,
 )
 from autogen.beta.events.types import ModelMessage
 from autogen.beta.exceptions import UnsupportedInputError
@@ -113,7 +109,7 @@ class TestImageUrlInput:
     IMAGE_URL = "https://example.com/image.png"
 
     def test_converts_to_image_url_block(self) -> None:
-        result = convert_messages([ModelRequest([ImageUrlInput(url=self.IMAGE_URL)])])
+        result = convert_messages([ModelRequest([ImageInput(url=self.IMAGE_URL)])])
 
         assert result == [
             {
@@ -181,7 +177,7 @@ class TestDocumentUrlInput:
     DOC_URL = "https://example.com/doc.pdf"
 
     def test_converts_to_document_url_block(self) -> None:
-        result = convert_messages([ModelRequest([DocumentUrlInput(url=self.DOC_URL)])])
+        result = convert_messages([ModelRequest([DocumentInput(url=self.DOC_URL)])])
 
         assert result == [
             {
@@ -269,8 +265,8 @@ class TestMultipleInputs:
         result = convert_messages([
             ModelRequest([
                 TextInput("Describe these images."),
-                ImageUrlInput(url="https://example.com/a.png"),
-                ImageUrlInput(url="https://example.com/b.jpg"),
+                ImageInput(url="https://example.com/a.png"),
+                ImageInput(url="https://example.com/b.jpg"),
             ])
         ])
 
@@ -284,12 +280,12 @@ class TestMultipleInputs:
 
 class TestUnsupportedInputs:
     def test_audio_url_raises(self) -> None:
-        with pytest.raises(UnsupportedInputError, match="AudioUrlInput.*anthropic"):
-            convert_messages([ModelRequest([AudioUrlInput(url="https://example.com/audio.wav")])])
+        with pytest.raises(UnsupportedInputError, match="UrlInput.*audio.*anthropic"):
+            convert_messages([ModelRequest([AudioInput(url="https://example.com/audio.wav")])])
 
     def test_video_url_raises(self) -> None:
-        with pytest.raises(UnsupportedInputError, match="VideoUrlInput.*anthropic"):
-            convert_messages([ModelRequest([VideoUrlInput(url="https://example.com/video.mp4")])])
+        with pytest.raises(UnsupportedInputError, match="UrlInput.*video.*anthropic"):
+            convert_messages([ModelRequest([VideoInput(url="https://example.com/video.mp4")])])
 
     def test_audio_binary_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="BinaryInput.*audio.*anthropic"):
