@@ -17,7 +17,6 @@ from anthropic.types import (
     TextBlock,
     TextEditorCodeExecutionToolResultBlock,
     ThinkingBlock,
-    ToolSearchToolResultBlock,
     ToolUseBlock,
     WebFetchToolResultBlock,
     WebSearchToolResultBlock,
@@ -38,8 +37,10 @@ from autogen.beta.events import (
 )
 from autogen.beta.events.tool_events import ToolResult
 from autogen.beta.response import ResponseProto
-from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
+from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME, CodeExecutionToolSchema
 from autogen.beta.tools.builtin.skills import SkillsToolSchema
+from autogen.beta.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME
+from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 from autogen.beta.tools.schemas import ToolSchema
 
 from .mappers import (
@@ -51,23 +52,23 @@ from .mappers import (
     tool_to_api,
 )
 
-_SERVER_TOOL_RESULT_BLOCK_TYPES = (
-    WebSearchToolResultBlock,
-    WebFetchToolResultBlock,
-    CodeExecutionToolResultBlock,
-    BashCodeExecutionToolResultBlock,
-    TextEditorCodeExecutionToolResultBlock,
-    ToolSearchToolResultBlock,
-)
-
-_PROVIDER_TO_TOOL_NAME = {
-    "bash_code_execution": "code_execution",
-    "text_editor_code_execution": "code_execution",
+SERVER_TOOL_USE_NAME: dict[str, str] = {
+    "web_search": WEB_SEARCH_TOOL_NAME,
+    "web_fetch": WEB_FETCH_TOOL_NAME,
+    "code_execution": CODE_EXECUTION_TOOL_NAME,
+    "bash_code_execution": CODE_EXECUTION_TOOL_NAME,
+    "text_editor_code_execution": CODE_EXECUTION_TOOL_NAME,
 }
 
+RESULT_BLOCK_NAME: dict[type, str] = {
+    WebSearchToolResultBlock: WEB_SEARCH_TOOL_NAME,
+    WebFetchToolResultBlock: WEB_FETCH_TOOL_NAME,
+    CodeExecutionToolResultBlock: CODE_EXECUTION_TOOL_NAME,
+    BashCodeExecutionToolResultBlock: CODE_EXECUTION_TOOL_NAME,
+    TextEditorCodeExecutionToolResultBlock: CODE_EXECUTION_TOOL_NAME,
+}
 
-def _normalize_tool_name(provider_name: str) -> str:
-    return _PROVIDER_TO_TOOL_NAME.get(provider_name, provider_name)
+SERVER_TOOL_RESULT_BLOCK_TYPES = tuple(RESULT_BLOCK_NAME)
 
 
 class CreateOptions(TypedDict, total=False):
@@ -209,16 +210,16 @@ class AnthropicClient(LLMClient):
                 await context.send(
                     BuiltinToolCallEvent(
                         id=block.id,
-                        name=_normalize_tool_name(block.name),
+                        name=SERVER_TOOL_USE_NAME[block.name],
                         arguments=json.dumps(block.input),
                         provider_data={"provider_name": block.name},
                     )
                 )
-            elif isinstance(block, _SERVER_TOOL_RESULT_BLOCK_TYPES):
+            elif isinstance(block, SERVER_TOOL_RESULT_BLOCK_TYPES):
                 await context.send(
                     BuiltinToolResultEvent(
                         parent_id=block.tool_use_id,
-                        name=_normalize_tool_name(block.type.replace("_tool_result", "")),
+                        name=RESULT_BLOCK_NAME[type(block)],
                         result=ToolResult(content=block.model_dump(exclude_none=True)),
                     )
                 )
@@ -269,17 +270,17 @@ class AnthropicClient(LLMClient):
                 await context.send(
                     BuiltinToolCallEvent(
                         id=block.id,
-                        name=_normalize_tool_name(block.name),
+                        name=SERVER_TOOL_USE_NAME[block.name],
                         arguments=json.dumps(block.input),
                         provider_data={"provider_name": block.name},
                     )
                 )
 
-            elif isinstance(block, _SERVER_TOOL_RESULT_BLOCK_TYPES):
+            elif isinstance(block, SERVER_TOOL_RESULT_BLOCK_TYPES):
                 await context.send(
                     BuiltinToolResultEvent(
                         parent_id=block.tool_use_id,
-                        name=_normalize_tool_name(block.type.replace("_tool_result", "")),
+                        name=RESULT_BLOCK_NAME[type(block)],
                         result=ToolResult(content=block.model_dump(exclude_none=True)),
                     )
                 )
@@ -326,16 +327,16 @@ class AnthropicClient(LLMClient):
                     await context.send(
                         BuiltinToolCallEvent(
                             id=block.id,
-                            name=_normalize_tool_name(block.name),
+                            name=SERVER_TOOL_USE_NAME[block.name],
                             arguments=json.dumps(block.input),
                             provider_data={"provider_name": block.name},
                         )
                     )
-                elif block_type and block_type.endswith("_tool_result"):
+                elif isinstance(block, SERVER_TOOL_RESULT_BLOCK_TYPES):
                     await context.send(
                         BuiltinToolResultEvent(
                             parent_id=block.tool_use_id,
-                            name=_normalize_tool_name(block_type.replace("_tool_result", "")),
+                            name=RESULT_BLOCK_NAME[type(block)],
                             result=ToolResult(content=block.model_dump(exclude_none=True)),
                         )
                     )
