@@ -2,23 +2,17 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-from unittest.mock import Mock
-
-
-def _missing_optional_dependency(name: str, extra: str, error: ImportError) -> Mock:
-    def _raise(*args: object, **kwargs: object) -> None:
-        raise ImportError(
-            f'{name} requires optional dependencies. Install with `pip install "ag2[{extra}]"`'
-        ) from error
-
-    return Mock(side_effect=_raise)
-
+from autogen.beta.exceptions import missing_optional_dependency
 
 try:
-    from .duckduckgo import DuckDuckGoSearchTool, SearchResponse, SearchResult
+    from .duckduckgo import DuckDuckSearchTool, SearchResponse, SearchResult
 except ImportError as e:
-    DuckDuckGoSearchTool = _missing_optional_dependency("DuckDuckGoSearchTool", "ddgs", e)  # type: ignore[misc]
-    SearchResult = _missing_optional_dependency("SearchResult", "ddgs", e)  # type: ignore[misc]
-    SearchResponse = _missing_optional_dependency("SearchResponse", "ddgs", e)  # type: ignore[misc]
+    DuckDuckSearchTool = missing_optional_dependency("DuckDuckSearchTool", "ddgs", e)  # type: ignore[misc]
+    SearchResult = missing_optional_dependency("SearchResult", "ddgs", e)  # type: ignore[misc]
+    SearchResponse = missing_optional_dependency("SearchResponse", "ddgs", e)  # type: ignore[misc]
 
-__all__ = ("DuckDuckGoSearchTool", "SearchResponse", "SearchResult")
+__all__ = (
+    "DuckDuckSearchTool",
+    "SearchResponse",
+    "SearchResult",
+)

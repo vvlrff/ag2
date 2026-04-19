@@ -12,11 +12,11 @@ from autogen.beta import Context
 from autogen.beta.annotations import Variable
 from autogen.beta.events import ToolCallEvent
 from autogen.beta.events.tool_events import ToolErrorEvent
-from autogen.beta.tools import DuckDuckGoSearchTool
+from autogen.beta.tools import DuckDuckSearchTool
 
 
 @pytest.mark.asyncio
-class TestDuckDuckGoSearchToolVariable:
+class TestDuckDuckSearchToolVariable:
     # Client-side tool: Variables are resolved inside the function body at call time,
     # not in `schemas()`. FunctionTool.__call__ catches exceptions into ToolErrorEvent,
     # so a missing variable surfaces as an error event rather than a raised KeyError.
@@ -25,7 +25,7 @@ class TestDuckDuckGoSearchToolVariable:
         mock_client = MagicMock()
         mock_client.text.return_value = []
         ctx = make_context(result_limit=7, region="ru-ru")
-        tool = DuckDuckGoSearchTool(
+        tool = DuckDuckSearchTool(
             max_results=Variable("result_limit"),
             region=Variable("region"),
             client=mock_client,
@@ -37,7 +37,7 @@ class TestDuckDuckGoSearchToolVariable:
         mock_client.text.assert_called_once_with("ag2", region="ru-ru", safesearch="moderate", max_results=7)
 
     async def test_missing_raises(self, context: Context) -> None:
-        tool = DuckDuckGoSearchTool(max_results=Variable("result_limit"), client=MagicMock())
+        tool = DuckDuckSearchTool(max_results=Variable("result_limit"), client=MagicMock())
 
         event = ToolCallEvent(arguments=json.dumps({"query": "ag2"}), name="duckduckgo_search")
         result = await tool._tool(event, context)

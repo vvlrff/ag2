@@ -14,7 +14,6 @@ from autogen.beta.annotations import Context, Variable
 from autogen.beta.middleware import BaseMiddleware, ToolMiddleware
 from autogen.beta.tools.builtin._resolve import resolve_variable
 from autogen.beta.tools.final import tool
-from autogen.beta.tools.final.function_tool import FunctionTool
 from autogen.beta.tools.tool import Tool
 
 
@@ -31,8 +30,11 @@ class SearchResponse:
     results: list[SearchResult] = field(default_factory=list)
 
 
-class DuckDuckGoSearchTool(Tool):
-    __slots__ = ("_tool", "name")
+class DuckDuckSearchTool(Tool):
+    __slots__ = (
+        "_tool",
+        "name",
+    )
 
     def __init__(
         self,
@@ -50,6 +52,11 @@ class DuckDuckGoSearchTool(Tool):
         _region = "us-en" if region is None else region
         _safesearch = "moderate" if safesearch is None else safesearch
 
+        @tool(
+            name=name,
+            description=description,
+            middleware=middleware,
+        )
         def duckduckgo_search(
             query: Annotated[str, Field(description="The search query string.")],
             ctx: Context,
@@ -68,12 +75,7 @@ class DuckDuckGoSearchTool(Tool):
             items = [SearchResult(title=r["title"], url=r["href"], snippet=r["body"]) for r in (raw or [])]
             return SearchResponse(query=query, results=items)
 
-        self._tool: FunctionTool = tool(
-            duckduckgo_search,
-            name=name,
-            description=description,
-            middleware=middleware,
-        )
+        self._tool = duckduckgo_search
         self.name = name
 
     async def schemas(self, context: Context) -> list:

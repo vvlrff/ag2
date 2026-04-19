@@ -6,13 +6,14 @@ import json
 from unittest.mock import MagicMock
 
 import pytest
+from dirty_equals import IsPartialDict
 
 from autogen.beta import Agent, MemoryStream
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import ToolCallEvent, ToolCallsEvent, ToolResultEvent
 from autogen.beta.events.types import ModelResponse
 from autogen.beta.testing import TestConfig
-from autogen.beta.tools.search import DuckDuckGoSearchTool, SearchResponse, SearchResult
+from autogen.beta.tools.search import DuckDuckSearchTool, SearchResponse, SearchResult
 
 SAMPLE_RESULTS = [
     {"title": "AG2 Framework", "href": "https://ag2.ai", "body": "AG2 is an agent framework."},
@@ -37,18 +38,18 @@ def _make_config(query: str, final_reply: str = "done") -> TestConfig:
 @pytest.mark.asyncio
 class TestSchema:
     async def test_schema_has_query_param(self, context: ConversationContext) -> None:
-        ddg = DuckDuckGoSearchTool(client=MagicMock())
+        ddg = DuckDuckSearchTool(client=MagicMock())
 
         [schema] = await ddg.schemas(context)
 
         assert schema.function.name == "duckduckgo_search"
-        params = schema.function.parameters
-        assert "query" in params["properties"]
-        assert params["properties"]["query"]["type"] == "string"
-        assert "query" in params["required"]
+        assert schema.function.parameters == IsPartialDict({
+            "properties": IsPartialDict({"query": IsPartialDict({"type": "string"})}),
+            "required": ["query"],
+        })
 
     async def test_custom_name_and_description(self, context: ConversationContext) -> None:
-        ddg = DuckDuckGoSearchTool(client=MagicMock(), name="my_search", description="Custom search tool.")
+        ddg = DuckDuckSearchTool(client=MagicMock(), name="my_search", description="Custom search tool.")
 
         [schema] = await ddg.schemas(context)
 
@@ -62,7 +63,7 @@ class TestSearchExecution:
         mock_client = MagicMock()
         mock_client.text.return_value = SAMPLE_RESULTS
 
-        ddg = DuckDuckGoSearchTool(client=mock_client)
+        ddg = DuckDuckSearchTool(client=mock_client)
         agent = Agent("a", config=_make_config("AG2 framework"), tools=[ddg])
 
         tool_results: list[SearchResponse] = []
@@ -86,7 +87,7 @@ class TestSearchExecution:
         mock_client = MagicMock()
         mock_client.text.return_value = []
 
-        ddg = DuckDuckGoSearchTool(client=mock_client)
+        ddg = DuckDuckSearchTool(client=mock_client)
         agent = Agent("a", config=_make_config("nonexistent query"), tools=[ddg])
 
         tool_results: list[SearchResponse] = []
@@ -101,7 +102,7 @@ class TestSearchExecution:
         mock_client = MagicMock()
         mock_client.text.return_value = SAMPLE_RESULTS
 
-        ddg = DuckDuckGoSearchTool(client=mock_client, max_results=3, region="us-en", safesearch="off")
+        ddg = DuckDuckSearchTool(client=mock_client, max_results=3, region="us-en", safesearch="off")
         agent = Agent("a", config=_make_config("test query"), tools=[ddg])
 
         await agent.ask("search")
@@ -112,7 +113,7 @@ class TestSearchExecution:
         mock_client = MagicMock()
         mock_client.text.return_value = SAMPLE_RESULTS
 
-        ddg = DuckDuckGoSearchTool(client=mock_client, name="web_search")
+        ddg = DuckDuckSearchTool(client=mock_client, name="web_search")
 
         tool_call = ToolCallEvent(
             arguments=json.dumps({"query": "test"}),
