@@ -17,6 +17,11 @@ from autogen.beta.tools import TavilySearchTool
 
 @pytest.mark.asyncio
 class TestTavilySearchToolVariable:
+from autogen.beta.tools import DuckDuckSearchTool
+
+
+@pytest.mark.asyncio
+class TestDuckDuckSearchToolVariable:
     # Client-side tool: Variables are resolved inside the function body at call time,
     # not in `schemas()`. FunctionTool.__call__ catches exceptions into ToolErrorEvent,
     # so a missing variable surfaces as an error event rather than a raised KeyError.
@@ -40,6 +45,23 @@ class TestTavilySearchToolVariable:
         tool = TavilySearchTool(max_results=Variable("result_limit"), client=MagicMock())
 
         event = ToolCallEvent(arguments=json.dumps({"query": "ag2"}), name="tavily_search")
+        mock_client.text.return_value = []
+        ctx = make_context(result_limit=7, region="ru-ru")
+        tool = DuckDuckSearchTool(
+            max_results=Variable("result_limit"),
+            region=Variable("region"),
+            client=mock_client,
+        )
+
+        event = ToolCallEvent(arguments=json.dumps({"query": "ag2"}), name="duckduckgo_search")
+        await tool._tool(event, ctx)
+
+        mock_client.text.assert_called_once_with("ag2", region="ru-ru", safesearch="moderate", max_results=7)
+
+    async def test_missing_raises(self, context: Context) -> None:
+        tool = DuckDuckSearchTool(max_results=Variable("result_limit"), client=MagicMock())
+
+        event = ToolCallEvent(arguments=json.dumps({"query": "ag2"}), name="duckduckgo_search")
         result = await tool._tool(event, context)
 
         assert isinstance(result, ToolErrorEvent)
