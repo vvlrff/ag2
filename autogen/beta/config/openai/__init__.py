@@ -4,6 +4,12 @@
 
 from .config import OpenAIConfig, OpenAIResponsesConfig
 from .containers import ContainerInfo, ContainerManager, ExpiresAfter
+from .events import (
+    OpenAIReasoningEvent,
+    OpenAIServerToolCallEvent,
+    OpenAIServerToolItem,
+    OpenAIServerToolResultEvent,
+)
 from .openai_client import OpenAIClient
 from .openai_responses_client import OpenAIResponsesClient
 
@@ -13,6 +19,10 @@ __all__ = (
     "ExpiresAfter",
     "OpenAIClient",
     "OpenAIConfig",
+    "OpenAIReasoningEvent",
     "OpenAIResponsesClient",
     "OpenAIResponsesConfig",
+    "OpenAIServerToolCallEvent",
+    "OpenAIServerToolItem",
+    "OpenAIServerToolResultEvent",
 )

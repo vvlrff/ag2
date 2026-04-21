@@ -4,7 +4,6 @@
 
 from autogen.beta.exceptions import missing_optional_dependency
 
-
 try:
     from .tavily import SearchResponse, SearchResult, TavilySearchTool
 except ImportError as e:
