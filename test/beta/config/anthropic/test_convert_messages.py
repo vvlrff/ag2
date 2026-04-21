@@ -3,18 +3,30 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import base64
+from collections.abc import Callable
+from typing import Any
 
 import pytest
+from anthropic.types import (
+    BashCodeExecutionToolResultBlock,
+    ServerToolUseBlock,
+    TextEditorCodeExecutionToolResultBlock,
+    WebSearchToolResultBlock,
+)
+from anthropic.types.bash_code_execution_tool_result_error import BashCodeExecutionToolResultError
+from anthropic.types.text_editor_code_execution_tool_result_error import TextEditorCodeExecutionToolResultError
 from dirty_equals import IsPartialDict
 
 from autogen.beta import ToolResult
+from autogen.beta.config.anthropic import (
+    AnthropicServerToolCallEvent,
+    AnthropicServerToolResultEvent,
+)
 from autogen.beta.config.anthropic.mappers import convert_messages
 from autogen.beta.events import (
     AudioInput,
     BinaryInput,
     BinaryType,
-    BuiltinToolCallEvent,
-    BuiltinToolResultEvent,
     DocumentInput,
     FileIdInput,
     ImageInput,
@@ -41,40 +53,24 @@ def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
     )
 
 
-class TestConvertMessagesEmptyArguments:
-    """json.loads must not crash on empty or None tool call arguments."""
+@pytest.mark.parametrize(
+    ("arguments", "expected_input"),
+    [
+        pytest.param("", {}, id="empty_string"),
+        pytest.param(None, {}, id="none"),
+        pytest.param("{}", {}, id="empty_object"),
+        pytest.param('{"category": "books"}', {"category": "books"}, id="valid_object"),
+    ],
+)
+def test_tool_call_arguments_parsed_into_input(arguments: str | None, expected_input: dict) -> None:
+    result = convert_messages([_model_response_with_tool_call(arguments)])
 
-    @pytest.mark.parametrize("arguments", ["", None])
-    def test_empty_arguments_produce_empty_dict(self, arguments: str | None) -> None:
-        response = _model_response_with_tool_call(arguments)
-        result = convert_messages([response])
-
-        assert result == [
-            IsPartialDict({
-                "role": "assistant",
-                "content": [IsPartialDict({"type": "tool_use", "id": "tc_1", "name": "list_items", "input": {}})],
-            }),
-        ]
-
-    def test_valid_arguments_are_preserved(self) -> None:
-        response = _model_response_with_tool_call('{"category": "books"}')
-        result = convert_messages([response])
-
-        assert result == [
-            IsPartialDict({
-                "content": [IsPartialDict({"type": "tool_use", "input": {"category": "books"}})],
-            }),
-        ]
-
-    def test_empty_object_arguments(self) -> None:
-        response = _model_response_with_tool_call("{}")
-        result = convert_messages([response])
-
-        assert result == [
-            IsPartialDict({
-                "content": [IsPartialDict({"type": "tool_use", "input": {}})],
-            }),
-        ]
+    assert result == [
+        IsPartialDict({
+            "role": "assistant",
+            "content": [IsPartialDict({"type": "tool_use", "input": expected_input})],
+        }),
+    ]
 
 
 def test_full_sequence_with_empty_args() -> None:
@@ -278,54 +274,86 @@ class TestMultipleInputs:
         assert result[0]["content"][2] == IsPartialDict({"type": "image"})
 
 
-class TestUnsupportedInputs:
-    def test_audio_url_raises(self) -> None:
-        with pytest.raises(UnsupportedInputError, match="UrlInput.*audio.*anthropic"):
-            convert_messages([ModelRequest([AudioInput(url="https://example.com/audio.wav")])])
+@pytest.mark.parametrize(
+    ("input_factory", "match"),
+    [
+        pytest.param(
+            lambda: AudioInput(url="https://example.com/audio.wav"),
+            "UrlInput.*audio.*anthropic",
+            id="audio_url",
+        ),
+        pytest.param(
+            lambda: VideoInput(url="https://example.com/video.mp4"),
+            "UrlInput.*video.*anthropic",
+            id="video_url",
+        ),
+        pytest.param(
+            lambda: AudioInput(data=b"\x00audio", media_type="audio/wav"),
+            "BinaryInput.*audio.*anthropic",
+            id="audio_binary",
+        ),
+        pytest.param(
+            lambda: VideoInput(data=b"\x00video", media_type="video/mp4"),
+            "BinaryInput.*video.*anthropic",
+            id="video_binary",
+        ),
+        pytest.param(
+            lambda: BinaryInput(data=b"\x00", media_type="application/octet-stream", kind=BinaryType.BINARY),
+            "BinaryInput.*binary.*anthropic",
+            id="generic_binary",
+        ),
+    ],
+)
+def test_unsupported_input_raises(input_factory: Callable[[], Any], match: str) -> None:
+    with pytest.raises(UnsupportedInputError, match=match):
+        convert_messages([ModelRequest([input_factory()])])
 
-    def test_video_url_raises(self) -> None:
-        with pytest.raises(UnsupportedInputError, match="UrlInput.*video.*anthropic"):
-            convert_messages([ModelRequest([VideoInput(url="https://example.com/video.mp4")])])
 
-    def test_audio_binary_raises(self) -> None:
-        with pytest.raises(UnsupportedInputError, match="BinaryInput.*audio.*anthropic"):
-            convert_messages([ModelRequest([AudioInput(data=b"\x00audio", media_type="audio/wav")])])
-
-    def test_video_binary_raises(self) -> None:
-        with pytest.raises(UnsupportedInputError, match="BinaryInput.*video.*anthropic"):
-            convert_messages([ModelRequest([VideoInput(data=b"\x00video", media_type="video/mp4")])])
-
-    def test_generic_binary_raises(self) -> None:
-        with pytest.raises(UnsupportedInputError, match="BinaryInput.*binary.*anthropic"):
-            convert_messages([
-                ModelRequest([BinaryInput(data=b"\x00", media_type="application/octet-stream", kind=BinaryType.BINARY)])
-            ])
+def _server_tool_use_block(
+    *,
+    id: str = "stu_1",
+    name: str = "web_search",
+    input: dict | None = None,
+) -> ServerToolUseBlock:
+    return ServerToolUseBlock(
+        id=id,
+        name=name,
+        input=input if input is not None else {"query": "bitcoin price"},
+        type="server_tool_use",
+    )
 
 
-class TestBuiltinToolCallEvent:
-    def test_creates_assistant_message_with_server_tool_use(self) -> None:
+def _web_search_result_block(
+    *,
+    tool_use_id: str = "stu_1",
+    content: list | None = None,
+) -> WebSearchToolResultBlock:
+    return WebSearchToolResultBlock(
+        tool_use_id=tool_use_id,
+        type="web_search_tool_result",
+        content=content if content is not None else [],
+    )
+
+
+class TestAnthropicServerToolCallEvent:
+    def test_emits_wrapped_sdk_block_as_assistant_content(self) -> None:
+        block = _server_tool_use_block()
         result = convert_messages([
-            BuiltinToolCallEvent(id="stu_1", name="web_search", arguments='{"query": "bitcoin price"}'),
+            AnthropicServerToolCallEvent(
+                id=block.id,
+                name="web_search",
+                arguments="{}",
+                block=block,
+            ),
         ])
 
-        assert result == [
-            {
-                "role": "assistant",
-                "content": [
-                    {
-                        "type": "server_tool_use",
-                        "id": "stu_1",
-                        "name": "web_search",
-                        "input": {"query": "bitcoin price"},
-                    }
-                ],
-            }
-        ]
+        assert result == [{"role": "assistant", "content": [block.model_dump(exclude_none=True, mode="json")]}]
 
     def test_appends_to_existing_assistant_message(self) -> None:
+        block = _server_tool_use_block(input={"query": "test"})
         result = convert_messages([
             ModelResponse(message=ModelMessage("Let me search for that."), tool_calls=ToolCallsEvent()),
-            BuiltinToolCallEvent(id="stu_1", name="web_search", arguments='{"query": "test"}'),
+            AnthropicServerToolCallEvent(id=block.id, name="web_search", arguments="{}", block=block),
         ])
 
         assert result == [
@@ -333,54 +361,36 @@ class TestBuiltinToolCallEvent:
                 "role": "assistant",
                 "content": [
                     {"type": "text", "text": "Let me search for that."},
-                    {
-                        "type": "server_tool_use",
-                        "id": "stu_1",
-                        "name": "web_search",
-                        "input": {"query": "test"},
-                    },
+                    block.model_dump(exclude_none=True, mode="json"),
                 ],
             }
         ]
 
-    def test_empty_arguments(self) -> None:
+
+class TestAnthropicServerToolResultEvent:
+    def test_emits_wrapped_sdk_block_as_assistant_content(self) -> None:
+        block = _web_search_result_block()
         result = convert_messages([
-            BuiltinToolCallEvent(id="stu_1", name="web_search", arguments=""),
-        ])
-
-        assert result == [
-            {
-                "role": "assistant",
-                "content": [{"type": "server_tool_use", "id": "stu_1", "name": "web_search", "input": {}}],
-            }
-        ]
-
-
-class TestBuiltinToolResultEvent:
-    def test_creates_assistant_message(self) -> None:
-        result_data = {
-            "type": "web_search_tool_result",
-            "tool_use_id": "stu_1",
-            "content": [{"title": "Bitcoin", "url": "https://example.com"}],
-        }
-        result = convert_messages([
-            BuiltinToolResultEvent(
-                parent_id="stu_1",
+            AnthropicServerToolResultEvent(
+                parent_id=block.tool_use_id,
                 name="web_search",
-                result=ToolResult(content=result_data),
+                result=ToolResult(),
+                block=block,
             ),
         ])
 
-        assert result == [{"role": "assistant", "content": [result_data]}]
+        assert result == [{"role": "assistant", "content": [block.model_dump(exclude_none=True, mode="json")]}]
 
-    def test_appends_to_existing_assistant_message(self) -> None:
-        result_data = {"type": "web_search_tool_result", "tool_use_id": "stu_1", "content": []}
+    def test_call_and_result_blocks_stack_into_one_assistant_message(self) -> None:
+        call_block = _server_tool_use_block(input={"query": "test"})
+        result_block = _web_search_result_block()
         result = convert_messages([
-            BuiltinToolCallEvent(id="stu_1", name="web_search", arguments='{"query": "test"}'),
-            BuiltinToolResultEvent(
-                parent_id="stu_1",
+            AnthropicServerToolCallEvent(id=call_block.id, name="web_search", arguments="{}", block=call_block),
+            AnthropicServerToolResultEvent(
+                parent_id=result_block.tool_use_id,
                 name="web_search",
-                result=ToolResult(content=result_data),
+                result=ToolResult(),
+                block=result_block,
             ),
         ])
 
@@ -388,28 +398,25 @@ class TestBuiltinToolResultEvent:
             {
                 "role": "assistant",
                 "content": [
-                    {
-                        "type": "server_tool_use",
-                        "id": "stu_1",
-                        "name": "web_search",
-                        "input": {"query": "test"},
-                    },
-                    result_data,
+                    call_block.model_dump(exclude_none=True, mode="json"),
+                    result_block.model_dump(exclude_none=True, mode="json"),
                 ],
             }
         ]
 
 
-def test_builtin_tool_full_sequence_round_trip() -> None:
-    """ModelRequest -> BuiltinToolCall -> BuiltinToolResult -> ModelResponse -> ModelRequest."""
-    result_data = {"type": "web_search_tool_result", "tool_use_id": "stu_1", "content": []}
+def test_full_sequence_round_trip() -> None:
+    """ModelRequest -> call+result -> ModelResponse -> ModelRequest."""
+    call_block = _server_tool_use_block(input={"query": "bitcoin"})
+    result_block = _web_search_result_block()
     events = [
         ModelRequest([TextInput("Search for bitcoin price")]),
-        BuiltinToolCallEvent(id="stu_1", name="web_search", arguments='{"query": "bitcoin"}'),
-        BuiltinToolResultEvent(
-            parent_id="stu_1",
+        AnthropicServerToolCallEvent(id=call_block.id, name="web_search", arguments="{}", block=call_block),
+        AnthropicServerToolResultEvent(
+            parent_id=result_block.tool_use_id,
             name="web_search",
-            result=ToolResult(content=result_data),
+            result=ToolResult(),
+            block=result_block,
         ),
         ModelResponse(message=ModelMessage("Bitcoin is $74,000."), tool_calls=ToolCallsEvent()),
         ModelRequest([TextInput("What was the exact price?")]),
@@ -422,13 +429,8 @@ def test_builtin_tool_full_sequence_round_trip() -> None:
         {
             "role": "assistant",
             "content": [
-                {
-                    "type": "server_tool_use",
-                    "id": "stu_1",
-                    "name": "web_search",
-                    "input": {"query": "bitcoin"},
-                },
-                result_data,
+                call_block.model_dump(exclude_none=True, mode="json"),
+                result_block.model_dump(exclude_none=True, mode="json"),
             ],
         },
         {"role": "assistant", "content": [{"type": "text", "text": "Bitcoin is $74,000."}]},
@@ -436,110 +438,64 @@ def test_builtin_tool_full_sequence_round_trip() -> None:
     ]
 
 
-class TestCodeExecutionRoundTrip:
-    """Anthropic's code_execution emits sub-tool names. After the client normalizes
-    BuiltinToolCallEvent.name to "code_execution" (with original in provider_data),
-    convert_messages must restore the provider name when sending history back."""
-
-    def test_bash_code_execution_preserves_provider_name(self) -> None:
-        result_data = {
-            "type": "bash_code_execution_tool_result",
-            "tool_use_id": "stu_1",
-            "content": {"type": "bash_code_execution_result", "stdout": "hello\n", "stderr": "", "return_code": 0},
-        }
-        events = [
-            ModelRequest([TextInput("Run echo hello")]),
-            BuiltinToolCallEvent(
+@pytest.mark.parametrize(
+    ("call_block", "result_block"),
+    [
+        pytest.param(
+            ServerToolUseBlock(
                 id="stu_1",
-                name="code_execution",
-                arguments='{"command": "echo hello"}',
-                provider_data={"provider_name": "bash_code_execution"},
+                name="bash_code_execution",
+                input={"command": "echo hello"},
+                type="server_tool_use",
             ),
-            BuiltinToolResultEvent(
-                parent_id="stu_1",
-                name="code_execution",
-                result=ToolResult(content=result_data),
+            BashCodeExecutionToolResultBlock(
+                tool_use_id="stu_1",
+                type="bash_code_execution_tool_result",
+                content=BashCodeExecutionToolResultError(
+                    error_code="unavailable",
+                    type="bash_code_execution_tool_result_error",
+                ),
             ),
-            ModelResponse(message=ModelMessage("Output: hello"), tool_calls=ToolCallsEvent()),
-            ModelRequest([TextInput("Now run pwd")]),
-        ]
-
-        result = convert_messages(events)
-
-        assert result == [
-            {"role": "user", "content": [{"type": "text", "text": "Run echo hello"}]},
-            {
-                "role": "assistant",
-                "content": [
-                    {
-                        "type": "server_tool_use",
-                        "id": "stu_1",
-                        "name": "bash_code_execution",
-                        "input": {"command": "echo hello"},
-                    },
-                    result_data,
-                ],
-            },
-            {"role": "assistant", "content": [{"type": "text", "text": "Output: hello"}]},
-            {"role": "user", "content": [{"type": "text", "text": "Now run pwd"}]},
-        ]
-
-    def test_text_editor_code_execution_preserves_provider_name(self) -> None:
-        result_data = {
-            "type": "text_editor_code_execution_tool_result",
-            "tool_use_id": "stu_2",
-            "content": {"type": "text_editor_code_execution_view_result", "content": "file contents"},
-        }
-        events = [
-            BuiltinToolCallEvent(
+            id="bash",
+        ),
+        pytest.param(
+            ServerToolUseBlock(
                 id="stu_2",
-                name="code_execution",
-                arguments='{"command": "view", "path": "/a.txt"}',
-                provider_data={"provider_name": "text_editor_code_execution"},
+                name="text_editor_code_execution",
+                input={"command": "view", "path": "/a.txt"},
+                type="server_tool_use",
             ),
-            BuiltinToolResultEvent(
-                parent_id="stu_2",
-                name="code_execution",
-                result=ToolResult(content=result_data),
+            TextEditorCodeExecutionToolResultBlock(
+                tool_use_id="stu_2",
+                type="text_editor_code_execution_tool_result",
+                content=TextEditorCodeExecutionToolResultError(
+                    error_code="file_not_found",
+                    type="text_editor_code_execution_tool_result_error",
+                ),
             ),
-        ]
+            id="text_editor",
+        ),
+    ],
+)
+def test_code_execution_subtool_preserves_block_shape(
+    call_block: ServerToolUseBlock,
+    result_block: Any,
+) -> None:
+    """Anthropic's code_execution tool reports results via sub-tool-specific block
+    types. The typed event preserves the original block shape so replay stays lossless."""
+    result = convert_messages([
+        AnthropicServerToolCallEvent(id=call_block.id, name="code_execution", arguments="{}", block=call_block),
+        AnthropicServerToolResultEvent(
+            parent_id=result_block.tool_use_id, name="code_execution", result=ToolResult(), block=result_block
+        ),
+    ])
 
-        result = convert_messages(events)
-
-        assert result == [
-            {
-                "role": "assistant",
-                "content": [
-                    {
-                        "type": "server_tool_use",
-                        "id": "stu_2",
-                        "name": "text_editor_code_execution",
-                        "input": {"command": "view", "path": "/a.txt"},
-                    },
-                    result_data,
-                ],
-            }
-        ]
-
-    def test_missing_provider_data_falls_back_to_event_name(self) -> None:
-        """Non-Anthropic sources (e.g. a user replaying history) may omit provider_data.
-        The mapper must not crash — it should use the event name as-is."""
-        events = [
-            BuiltinToolCallEvent(id="stu_3", name="web_search", arguments='{"query": "x"}'),
-        ]
-
-        result = convert_messages(events)
-
-        assert result == [
-            {
-                "role": "assistant",
-                "content": [
-                    {
-                        "type": "server_tool_use",
-                        "id": "stu_3",
-                        "name": "web_search",
-                        "input": {"query": "x"},
-                    }
-                ],
-            }
-        ]
+    assert result == [
+        {
+            "role": "assistant",
+            "content": [
+                call_block.model_dump(exclude_none=True, mode="json"),
+                result_block.model_dump(exclude_none=True, mode="json"),
+            ],
+        }
+    ]

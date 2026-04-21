@@ -3,8 +3,16 @@
 # SPDX-License-Identifier: Apache-2.0
 from .anthropic_client import AnthropicClient
 from .config import AnthropicConfig
+from .events import (
+    AnthropicServerToolCallEvent,
+    AnthropicServerToolResultBlockType,
+    AnthropicServerToolResultEvent,
+)
 
 __all__ = (
     "AnthropicClient",
     "AnthropicConfig",
+    "AnthropicServerToolCallEvent",
+    "AnthropicServerToolResultBlockType",
+    "AnthropicServerToolResultEvent",
 )
