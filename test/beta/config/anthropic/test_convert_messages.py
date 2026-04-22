@@ -380,9 +380,20 @@ class TestToolResult:
         )
         result = convert_messages([event], SerializerCls)
 
-        assert result[0]["content"][0]["content"] == [
-            {"type": "text", "text": "here you go"},
-            IsPartialDict({"type": "image"}),
+        assert result == [
+            IsPartialDict({
+                "role": "user",
+                "content": [
+                    IsPartialDict({
+                        "type": "tool_result",
+                        "tool_use_id": "tc_1",
+                        "content": [
+                            {"type": "text", "text": "here you go"},
+                            IsPartialDict({"type": "image"}),
+                        ],
+                    })
+                ],
+            })
         ]
 
     def test_document_in_tool_result_raises(self) -> None:

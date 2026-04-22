@@ -235,18 +235,16 @@ class TestDocumentUrlInput:
         ]
 
 
-class TestDataInputResponses:
+def test_data_input_in_model_request_becomes_input_text() -> None:
     """DataInput must be serialized to input_text in Responses API ModelRequest."""
+    result = events_to_responses_input([ModelRequest([DataInput({"key": "value"})])], SerializerCls)
 
-    def test_dict_data(self) -> None:
-        result = events_to_responses_input([ModelRequest([DataInput({"key": "value"})])], SerializerCls)
-
-        assert result == [
-            {
-                "role": "user",
-                "content": [{"type": "input_text", "text": '{"key":"value"}'}],
-            }
-        ]
+    assert result == [
+        {
+            "role": "user",
+            "content": [{"type": "input_text", "text": '{"key":"value"}'}],
+        }
+    ]
 
 
 class TestResponsesToolResult:
@@ -363,7 +361,13 @@ class TestResponsesToolResult:
         )
         result = events_to_responses_input([event], SerializerCls)
 
-        assert result[0]["output"][0] == IsPartialDict({"type": "input_file", "filename": "report.pdf"})
+        assert result == [
+            IsPartialDict({
+                "type": "function_call_output",
+                "call_id": "c1",
+                "output": [IsPartialDict({"type": "input_file", "filename": "report.pdf"})],
+            })
+        ]
 
     def test_file_id_becomes_input_file_block(self) -> None:
         """Only file_id is accepted (filename is rejected as mutually exclusive by the API)."""
