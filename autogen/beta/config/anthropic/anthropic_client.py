@@ -144,7 +144,7 @@ class AnthropicClient(LLMClient):
             create_kwargs["extra_headers"]["anthropic-beta"] = ",".join(sorted(existing_betas))
 
         # Files API beta: required when messages contain file_id references
-        if any(isinstance(inp, FileIdInput) for msg in messages if isinstance(msg, ModelRequest) for inp in msg.inputs):
+        if any(isinstance(inp, FileIdInput) for msg in messages if isinstance(msg, ModelRequest) for inp in msg.parts):
             existing_betas = set((create_kwargs.get("extra_headers") or {}).get("anthropic-beta", "").split(","))
             existing_betas.discard("")
             existing_betas.add("files-api-2025-04-14")

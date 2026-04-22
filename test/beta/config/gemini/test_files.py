@@ -23,22 +23,23 @@ class TestGeminiFilesClient:
             create_time="2025-01-01T00:00:00Z",
         )
 
-        client = GeminiFilesClient(gemini_config)
-        result = await client.upload(b"audio-data", "recording.mp3")
+        result = await GeminiFilesClient(gemini_config).upload(b"audio-data", "recording.mp3")
 
-        assert isinstance(result, UploadedFile)
-        assert result.file_id == "files/abc123"
-        assert result.filename == "recording.mp3"
-        assert result.provider == "gemini"
+        assert result == UploadedFile(
+            file_id="files/abc123",
+            filename="recording.mp3",
+            provider="gemini",
+            bytes_count=512,
+            purpose=None,
+            created_at="2025-01-01T00:00:00Z",
+        )
 
     @patch("autogen.beta.config.gemini.files.genai")
     async def test_read_raises(self, mock_genai: MagicMock, gemini_config: MagicMock) -> None:
         mock_genai.Client.return_value = MagicMock()
 
-        client = GeminiFilesClient(gemini_config)
-
         with pytest.raises(NotImplementedError, match="does not support downloading"):
-            await client.read("files/abc123")
+            await GeminiFilesClient(gemini_config).read("files/abc123")
 
     @patch("autogen.beta.config.gemini.files.genai")
     async def test_list(self, mock_genai: MagicMock, gemini_config: MagicMock) -> None:
@@ -53,19 +54,24 @@ class TestGeminiFilesClient:
             ),
         ]
 
-        client = GeminiFilesClient(gemini_config)
-        result = await client.list()
+        result = await GeminiFilesClient(gemini_config).list()
 
-        assert len(result) == 1
-        assert result[0].file_id == "files/1"
-        assert result[0].filename == "doc.pdf"
+        assert result == [
+            UploadedFile(
+                file_id="files/1",
+                filename="doc.pdf",
+                provider="gemini",
+                bytes_count=100,
+                purpose=None,
+                created_at="2025-01-01",
+            ),
+        ]
 
     @patch("autogen.beta.config.gemini.files.genai")
     async def test_delete(self, mock_genai: MagicMock, gemini_config: MagicMock) -> None:
         mock_client = MagicMock()
         mock_genai.Client.return_value = mock_client
 
-        client = GeminiFilesClient(gemini_config)
-        await client.delete("files/abc123")
+        await GeminiFilesClient(gemini_config).delete("files/abc123")
 
         mock_client.files.delete.assert_called_once_with(name="files/abc123")

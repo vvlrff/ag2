@@ -25,15 +25,16 @@ class TestOpenAIFilesClient:
             created_at=1700000000,
         )
 
-        client = OpenAIFilesClient(openai_config)
-        result = await client.upload(b"pdf-data", "test.pdf", "assistants")
+        result = await OpenAIFilesClient(openai_config).upload(b"pdf-data", "test.pdf", "assistants")
 
-        assert isinstance(result, UploadedFile)
-        assert result.file_id == "file-abc"
-        assert result.filename == "test.pdf"
-        assert result.provider == "openai"
-        assert result.bytes_count == 2048
-        assert result.purpose == "assistants"
+        assert result == UploadedFile(
+            file_id="file-abc",
+            filename="test.pdf",
+            provider="openai",
+            bytes_count=2048,
+            purpose="assistants",
+            created_at=str(1700000000),
+        )
 
     @patch("autogen.beta.config.openai.files.AsyncOpenAI")
     async def test_read(self, mock_openai_cls: MagicMock, openai_config: MagicMock) -> None:
@@ -42,12 +43,9 @@ class TestOpenAIFilesClient:
         mock_client.files.content.return_value = SimpleNamespace(content=b"file-bytes")
         mock_client.files.retrieve.return_value = SimpleNamespace(filename="doc.pdf")
 
-        client = OpenAIFilesClient(openai_config)
-        result = await client.read("file-abc")
+        result = await OpenAIFilesClient(openai_config).read("file-abc")
 
-        assert isinstance(result, FileContent)
-        assert result.data == b"file-bytes"
-        assert result.name == "doc.pdf"
+        assert result == FileContent(name="doc.pdf", data=b"file-bytes")
 
     @patch("autogen.beta.config.openai.files.AsyncOpenAI")
     async def test_list(self, mock_openai_cls: MagicMock, openai_config: MagicMock) -> None:
@@ -72,20 +70,32 @@ class TestOpenAIFilesClient:
             ]
         )
 
-        client = OpenAIFilesClient(openai_config)
-        result = await client.list()
+        result = await OpenAIFilesClient(openai_config).list()
 
-        assert len(result) == 2
-        assert result[0].file_id == "file-1"
-        assert result[1].file_id == "file-2"
-        assert result[1].purpose == "fine-tune"
+        assert result == [
+            UploadedFile(
+                file_id="file-1",
+                filename="a.txt",
+                provider="openai",
+                bytes_count=100,
+                purpose="assistants",
+                created_at=None,
+            ),
+            UploadedFile(
+                file_id="file-2",
+                filename="b.csv",
+                provider="openai",
+                bytes_count=200,
+                purpose="fine-tune",
+                created_at=str(1700000000),
+            ),
+        ]
 
     @patch("autogen.beta.config.openai.files.AsyncOpenAI")
     async def test_delete(self, mock_openai_cls: MagicMock, openai_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_openai_cls.return_value = mock_client
 
-        client = OpenAIFilesClient(openai_config)
-        await client.delete("file-abc")
+        await OpenAIFilesClient(openai_config).delete("file-abc")
 
         mock_client.files.delete.assert_awaited_once_with("file-abc")

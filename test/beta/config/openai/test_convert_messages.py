@@ -20,6 +20,7 @@ from autogen.beta.events import (
     TextInput,
 )
 from autogen.beta.exceptions import UnsupportedInputError
+from autogen.beta.files.types import UploadedFile
 
 
 class TestTextInput:
@@ -95,11 +96,28 @@ class TestFileIdInput:
 
     def test_responses_with_filename_ignores_filename(self) -> None:
         # OpenAI Responses API rejects file_id + filename together (mutually exclusive).
-        result = events_to_responses_input([ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="report.pdf")])])
-
-    def test_responses_with_filename(self) -> None:
         result = events_to_responses_input(
             [ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="report.pdf")])], SerializerCls
+        )
+
+        assert result == [
+            {
+                "role": "user",
+                "content": [{"type": "input_file", "file_id": self.FILE_ID}],
+            }
+        ]
+
+    def test_responses_foreign_provider_raises(self) -> None:
+        with pytest.raises(UnsupportedInputError, match="'anthropic'.*openai"):
+            events_to_responses_input(
+                [ModelRequest([UploadedFile(file_id="file_011CNha8", provider="anthropic")])],
+                SerializerCls,
+            )
+
+    def test_responses_matching_provider_passes(self) -> None:
+        result = events_to_responses_input(
+            [ModelRequest([UploadedFile(file_id=self.FILE_ID, provider="openai")])],
+            SerializerCls,
         )
 
         assert result == [

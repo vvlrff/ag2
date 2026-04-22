@@ -92,6 +92,9 @@ class GeminiConfig(GeminiBaseConfig, ModelConfig):
             cached_content=self.cached_content,
         )
 
+    def create_files_client(self) -> GeminiFilesClient:
+        return GeminiFilesClient(self)
+
 
 @dataclass(slots=True)
 class VertexAIConfig(GeminiBaseConfig, ModelConfig):
@@ -113,6 +116,3 @@ class VertexAIConfig(GeminiBaseConfig, ModelConfig):
             create_config=self._build_create_config(),
             cached_content=self.cached_content,
         )
-
-    def create_files_client(self) -> GeminiFilesClient:
-        return GeminiFilesClient(self)

@@ -19,6 +19,7 @@ from autogen.beta.events.input_events import (
 )
 from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
+from autogen.beta.files.types import UploadedFile
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.mcp_server import MCPServerToolSchema
@@ -261,6 +262,11 @@ def convert_messages(
                     content_parts.append({"type": "text", "text": serializer.encode(inp.data).decode()})
 
                 elif isinstance(inp, FileIdInput):
+                    if isinstance(inp, UploadedFile) and inp.provider not in (None, "anthropic"):
+                        raise UnsupportedInputError(
+                            f"file uploaded via {inp.provider!r} cannot be used with anthropic",
+                            "anthropic",
+                        )
                     block_type = _file_id_block_type(inp.filename)
                     content_parts.append({"type": block_type, "source": {"type": "file", "file_id": inp.file_id}})
 

@@ -18,6 +18,8 @@ from autogen.beta.events import (
     VideoInput,
 )
 from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent
+from autogen.beta.exceptions import UnsupportedInputError
+from autogen.beta.files.types import UploadedFile
 
 
 def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
@@ -268,14 +270,29 @@ class TestMultipleInputs:
         assert result[0].parts[1].inline_data.data == b"\x89PNG"
 
 
+class TestFileIdInput:
+    FILE_ID = "files/abc123"
 
-def test_file_id_input() -> None:
-    result = convert_messages([ModelRequest([FileIdInput(file_id="files/abc123")])])
+    def test_converts_to_part_with_v1beta_uri(self) -> None:
+        result = convert_messages([ModelRequest([FileIdInput(file_id=self.FILE_ID)])], SerializerCls)
 
-    assert len(result) == 1
-    assert result[0].parts[0].file_data.file_uri == "https://generativelanguage.googleapis.com/v1beta/files/abc123"
+        assert len(result) == 1
+        part = result[0].parts[0]
+        assert part.file_data.file_uri == f"https://generativelanguage.googleapis.com/v1beta/{self.FILE_ID}"
 
-def test_file_id_input_raises() -> None:
-    with pytest.raises(UnsupportedInputError, match="FileIdInput.*gemini"):
-        convert_messages([ModelRequest([FileIdInput(file_id="file-abc123")])], SerializerCls)
+    def test_foreign_provider_raises(self) -> None:
+        with pytest.raises(UnsupportedInputError, match="'openai'.*gemini"):
+            convert_messages(
+                [ModelRequest([UploadedFile(file_id="file-abc123", provider="openai")])],
+                SerializerCls,
+            )
 
+    def test_matching_provider_passes(self) -> None:
+        result = convert_messages(
+            [ModelRequest([UploadedFile(file_id=self.FILE_ID, provider="gemini")])],
+            SerializerCls,
+        )
+
+        assert len(result) == 1
+        part = result[0].parts[0]
+        assert part.file_data.file_uri == f"https://generativelanguage.googleapis.com/v1beta/{self.FILE_ID}"

@@ -24,14 +24,16 @@ class TestAnthropicFilesClient:
             created_at="2025-01-01T00:00:00Z",
         )
 
-        client = AnthropicFilesClient(anthropic_config)
-        result = await client.upload(b"pdf-data", "document.pdf")
+        result = await AnthropicFilesClient(anthropic_config).upload(b"pdf-data", "document.pdf")
 
-        assert isinstance(result, UploadedFile)
-        assert result.file_id == "file-011CNha8"
-        assert result.filename == "document.pdf"
-        assert result.provider == "anthropic"
-        assert result.bytes_count == 1024000
+        assert result == UploadedFile(
+            file_id="file-011CNha8",
+            filename="document.pdf",
+            provider="anthropic",
+            bytes_count=1024000,
+            purpose=None,
+            created_at="2025-01-01T00:00:00Z",
+        )
 
     @patch("autogen.beta.config.anthropic.files.AsyncAnthropic")
     async def test_read(self, mock_anthropic_cls: MagicMock, anthropic_config: MagicMock) -> None:
@@ -43,13 +45,9 @@ class TestAnthropicFilesClient:
             mime_type="text/csv",
         )
 
-        client = AnthropicFilesClient(anthropic_config)
-        result = await client.read("file-011CNha8")
+        result = await AnthropicFilesClient(anthropic_config).read("file-011CNha8")
 
-        assert isinstance(result, FileContent)
-        assert result.data == b"file-data"
-        assert result.name == "output.csv"
-        assert result.media_type == "text/csv"
+        assert result == FileContent(name="output.csv", data=b"file-data", media_type="text/csv")
 
     @patch("autogen.beta.config.anthropic.files.AsyncAnthropic")
     async def test_list(self, mock_anthropic_cls: MagicMock, anthropic_config: MagicMock) -> None:
@@ -66,19 +64,24 @@ class TestAnthropicFilesClient:
             ]
         )
 
-        client = AnthropicFilesClient(anthropic_config)
-        result = await client.list()
+        result = await AnthropicFilesClient(anthropic_config).list()
 
-        assert len(result) == 1
-        assert result[0].file_id == "file-1"
-        assert result[0].provider == "anthropic"
+        assert result == [
+            UploadedFile(
+                file_id="file-1",
+                filename="a.pdf",
+                provider="anthropic",
+                bytes_count=100,
+                purpose=None,
+                created_at="2025-01-01T00:00:00Z",
+            ),
+        ]
 
     @patch("autogen.beta.config.anthropic.files.AsyncAnthropic")
     async def test_delete(self, mock_anthropic_cls: MagicMock, anthropic_config: MagicMock) -> None:
         mock_client = AsyncMock()
         mock_anthropic_cls.return_value = mock_client
 
-        client = AnthropicFilesClient(anthropic_config)
-        await client.delete("file-011CNha8")
+        await AnthropicFilesClient(anthropic_config).delete("file-011CNha8")
 
         mock_client.beta.files.delete.assert_awaited_once_with("file-011CNha8")

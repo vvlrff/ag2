@@ -24,6 +24,7 @@ from autogen.beta.events import (
 )
 from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
+from autogen.beta.files.types import UploadedFile
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.image_generation import ImageGenerationToolSchema
@@ -157,6 +158,11 @@ def events_to_responses_input(
                     result.append({"role": "user", "content": [{"type": "input_text", "text": inp.content}]})
 
                 elif isinstance(inp, FileIdInput):
+                    if isinstance(inp, UploadedFile) and inp.provider not in (None, "openai"):
+                        raise UnsupportedInputError(
+                            f"file uploaded via {inp.provider!r} cannot be used with openai",
+                            "openai-responses",
+                        )
                     # OpenAI Responses API: file_id and filename are mutually exclusive.
                     # filename applies to inline file_data, not to file_id references.
                     result.append({
