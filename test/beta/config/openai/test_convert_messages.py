@@ -8,6 +8,7 @@ import pytest
 from dirty_equals import IsPartialDict
 from fast_depends.use import SerializerCls
 
+from autogen.beta import ToolResult
 from autogen.beta.config.openai.mappers import convert_messages, events_to_responses_input
 from autogen.beta.events import (
     AudioInput,
@@ -18,7 +19,10 @@ from autogen.beta.events import (
     ImageInput,
     ModelRequest,
     TextInput,
+    ToolResultEvent,
+    ToolResultsEvent,
 )
+from autogen.beta.events.input_events import DataInput
 from autogen.beta.exceptions import UnsupportedInputError
 
 
@@ -229,3 +233,193 @@ class TestDocumentUrlInput:
                 "content": [{"type": "input_file", "file_url": self.DOC_URL}],
             }
         ]
+
+
+class TestDataInputResponses:
+    """DataInput must be serialized to input_text in Responses API ModelRequest."""
+
+    def test_dict_data(self) -> None:
+        result = events_to_responses_input([ModelRequest([DataInput({"key": "value"})])], SerializerCls)
+
+        assert result == [
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": '{"key":"value"}'}],
+            }
+        ]
+
+
+class TestResponsesToolResult:
+    """Tool-result output supports text, image, file and file_id parts."""
+
+    def test_text_only_stays_string(self) -> None:
+        event = ToolResultsEvent(results=[ToolResultEvent(parent_id="c1", name="t", result=ToolResult("hello"))])
+        result = events_to_responses_input([event], SerializerCls)
+
+        assert result == [{"type": "function_call_output", "call_id": "c1", "output": "hello"}]
+
+    def test_image_binary_becomes_input_image_block(self) -> None:
+        png = b"\x89PNG\r\n"
+        event = ToolResultsEvent(
+            results=[
+                ToolResultEvent(
+                    parent_id="c1",
+                    name="t",
+                    result=ToolResult(ImageInput(data=png, media_type="image/png")),
+                )
+            ]
+        )
+        result = events_to_responses_input([event], SerializerCls)
+
+        expected_url = f"data:image/png;base64,{base64.b64encode(png).decode()}"
+        assert result == [
+            {
+                "type": "function_call_output",
+                "call_id": "c1",
+                "output": [{"type": "input_image", "image_url": expected_url}],
+            }
+        ]
+
+    def test_image_url_becomes_input_image_block(self) -> None:
+        event = ToolResultsEvent(
+            results=[
+                ToolResultEvent(
+                    parent_id="c1",
+                    name="t",
+                    result=ToolResult(ImageInput(url="https://example.com/a.png")),
+                )
+            ]
+        )
+        result = events_to_responses_input([event], SerializerCls)
+
+        assert result == [
+            {
+                "type": "function_call_output",
+                "call_id": "c1",
+                "output": [{"type": "input_image", "image_url": "https://example.com/a.png"}],
+            }
+        ]
+
+    def test_document_url_becomes_input_file_url_block(self) -> None:
+        """UrlInput(DOCUMENT) → input_file with file_url; filename is forbidden by the API here."""
+        event = ToolResultsEvent(
+            results=[
+                ToolResultEvent(
+                    parent_id="c1",
+                    name="t",
+                    result=ToolResult(DocumentInput(url="https://example.com/d.pdf")),
+                )
+            ]
+        )
+        result = events_to_responses_input([event], SerializerCls)
+
+        assert result == [
+            {
+                "type": "function_call_output",
+                "call_id": "c1",
+                "output": [{"type": "input_file", "file_url": "https://example.com/d.pdf"}],
+            }
+        ]
+
+    def test_document_binary_becomes_input_file_with_filename(self) -> None:
+        """BinaryInput(DOCUMENT) → input_file with file_data; API requires filename."""
+        event = ToolResultsEvent(
+            results=[
+                ToolResultEvent(
+                    parent_id="c1",
+                    name="t",
+                    result=ToolResult(DocumentInput(data=b"%PDF-1.4", media_type="application/pdf")),
+                )
+            ]
+        )
+        result = events_to_responses_input([event], SerializerCls)
+
+        expected_data = f"data:application/pdf;base64,{base64.b64encode(b'%PDF-1.4').decode()}"
+        assert result == [
+            {
+                "type": "function_call_output",
+                "call_id": "c1",
+                "output": [{"type": "input_file", "file_data": expected_data, "filename": "file.pdf"}],
+            }
+        ]
+
+    def test_document_binary_uses_vendor_filename(self) -> None:
+        """Custom filename via vendor_metadata is preserved in tool-result output."""
+        event = ToolResultsEvent(
+            results=[
+                ToolResultEvent(
+                    parent_id="c1",
+                    name="t",
+                    result=ToolResult(
+                        BinaryInput(
+                            data=b"%PDF-1.4",
+                            media_type="application/pdf",
+                            kind=BinaryType.DOCUMENT,
+                            vendor_metadata={"filename": "report.pdf"},
+                        )
+                    ),
+                )
+            ]
+        )
+        result = events_to_responses_input([event], SerializerCls)
+
+        assert result[0]["output"][0] == IsPartialDict({"type": "input_file", "filename": "report.pdf"})
+
+    def test_file_id_becomes_input_file_block(self) -> None:
+        """Only file_id is accepted (filename is rejected as mutually exclusive by the API)."""
+        event = ToolResultsEvent(
+            results=[
+                ToolResultEvent(
+                    parent_id="c1",
+                    name="t",
+                    result=ToolResult(FileIdInput(file_id="file-xyz", filename="r.pdf")),
+                )
+            ]
+        )
+        result = events_to_responses_input([event], SerializerCls)
+
+        assert result == [
+            {
+                "type": "function_call_output",
+                "call_id": "c1",
+                "output": [{"type": "input_file", "file_id": "file-xyz"}],
+            }
+        ]
+
+    def test_mixed_text_and_image(self) -> None:
+        png = b"\x89PNG\r\n"
+        event = ToolResultsEvent(
+            results=[
+                ToolResultEvent(
+                    parent_id="c1",
+                    name="t",
+                    result=ToolResult("here is an image", ImageInput(data=png, media_type="image/png")),
+                )
+            ]
+        )
+        result = events_to_responses_input([event], SerializerCls)
+
+        expected_url = f"data:image/png;base64,{base64.b64encode(png).decode()}"
+        assert result == [
+            {
+                "type": "function_call_output",
+                "call_id": "c1",
+                "output": [
+                    {"type": "output_text", "text": "here is an image"},
+                    {"type": "input_image", "image_url": expected_url},
+                ],
+            }
+        ]
+
+    def test_audio_binary_raises(self) -> None:
+        event = ToolResultsEvent(
+            results=[
+                ToolResultEvent(
+                    parent_id="c1",
+                    name="t",
+                    result=ToolResult(AudioInput(data=b"\x00", media_type="audio/wav")),
+                )
+            ]
+        )
+        with pytest.raises(UnsupportedInputError, match="BinaryInput.*openai-responses"):
+            events_to_responses_input([event], SerializerCls)

@@ -2,13 +2,14 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 from collections.abc import Iterable
 from typing import Any
 
 from fast_depends.library.serializer import SerializerProto
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
-from autogen.beta.events.input_events import DataInput
+from autogen.beta.events.input_events import BinaryInput, BinaryType, DataInput, UrlInput
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.skills import SkillsToolSchema
@@ -57,13 +58,31 @@ def convert_messages(
 
     for message in messages:
         if isinstance(message, ModelRequest):
+            blocks: list[dict[str, str]] = []
+            has_non_text = False
             for inp in message.parts:
                 if isinstance(inp, TextInput):
-                    result.append(inp.to_api())
+                    blocks.append({"text": inp.content})
                 elif isinstance(inp, DataInput):
-                    result.append({"role": "user", "content": serializer.encode(inp.data).decode()})
+                    blocks.append({"text": serializer.encode(inp.data).decode()})
+                elif isinstance(inp, BinaryInput) and inp.kind is BinaryType.IMAGE:
+                    b64 = base64.b64encode(inp.data).decode()
+                    blocks.append({"image": f"data:{inp.media_type};base64,{b64}"})
+                    has_non_text = True
+                elif isinstance(inp, UrlInput) and inp.kind is BinaryType.IMAGE:
+                    blocks.append({"image": inp.url})
+                    has_non_text = True
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "dashscope")
+
+            if not blocks:
+                continue
+            if has_non_text:
+                result.append({"role": "user", "content": blocks})
+            else:
+                # Text-only: keep classic string content for OpenAI-compat endpoints.
+                text = blocks[0]["text"] if len(blocks) == 1 else "\n".join(b["text"] for b in blocks)
+                result.append({"role": "user", "content": text})
 
         elif isinstance(message, ModelResponse):
             result.append(message.to_api())

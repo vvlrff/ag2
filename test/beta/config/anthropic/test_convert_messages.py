@@ -296,6 +296,109 @@ class TestMultipleInputs:
         assert result[0]["content"][2] == IsPartialDict({"type": "image"})
 
 
+class TestToolResult:
+    """Tool results can include image content blocks (binary + url)."""
+
+    PNG = b"\x89PNG\r\n"
+
+    def test_text_only_stays_string(self) -> None:
+        event = ToolResultsEvent(results=[ToolResultEvent(parent_id="tc_1", name="t", result=ToolResult("hello"))])
+        result = convert_messages([event], SerializerCls)
+
+        assert result == [
+            {
+                "role": "user",
+                "content": [{"type": "tool_result", "tool_use_id": "tc_1", "content": "hello"}],
+            }
+        ]
+
+    def test_binary_image(self) -> None:
+        event = ToolResultsEvent(
+            results=[
+                ToolResultEvent(
+                    parent_id="tc_1",
+                    name="t",
+                    result=ToolResult(ImageInput(data=self.PNG, media_type="image/png")),
+                )
+            ]
+        )
+        result = convert_messages([event], SerializerCls)
+
+        expected_b64 = base64.b64encode(self.PNG).decode()
+        assert result == [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "tc_1",
+                        "content": [
+                            {
+                                "type": "image",
+                                "source": {"type": "base64", "media_type": "image/png", "data": expected_b64},
+                            }
+                        ],
+                    }
+                ],
+            }
+        ]
+
+    def test_url_image(self) -> None:
+        event = ToolResultsEvent(
+            results=[
+                ToolResultEvent(
+                    parent_id="tc_1",
+                    name="t",
+                    result=ToolResult(ImageInput(url="https://example.com/a.png")),
+                )
+            ]
+        )
+        result = convert_messages([event], SerializerCls)
+
+        assert result == [
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "type": "tool_result",
+                        "tool_use_id": "tc_1",
+                        "content": [{"type": "image", "source": {"type": "url", "url": "https://example.com/a.png"}}],
+                    }
+                ],
+            }
+        ]
+
+    def test_mixed_text_and_image(self) -> None:
+        event = ToolResultsEvent(
+            results=[
+                ToolResultEvent(
+                    parent_id="tc_1",
+                    name="t",
+                    result=ToolResult("here you go", ImageInput(data=self.PNG, media_type="image/png")),
+                )
+            ]
+        )
+        result = convert_messages([event], SerializerCls)
+
+        assert result[0]["content"][0]["content"] == [
+            {"type": "text", "text": "here you go"},
+            IsPartialDict({"type": "image"}),
+        ]
+
+    def test_document_in_tool_result_raises(self) -> None:
+        event = ToolResultsEvent(
+            results=[
+                ToolResultEvent(
+                    parent_id="tc_1",
+                    name="t",
+                    result=ToolResult(DocumentInput(data=b"%PDF", media_type="application/pdf")),
+                )
+            ]
+        )
+        with pytest.raises(UnsupportedInputError, match="BinaryInput.*anthropic"):
+            convert_messages([event], SerializerCls)
+
+
 class TestUnsupportedInputs:
     def test_audio_url_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="UrlInput.*audio.*anthropic"):

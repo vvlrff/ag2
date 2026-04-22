@@ -241,9 +241,21 @@ def convert_messages(
                         parts.append({"type": "text", "text": part.content})
                     elif isinstance(part, DataInput):
                         parts.append({"type": "text", "text": serializer.encode(part.data).decode()})
+                    elif isinstance(part, BinaryInput) and part.kind is BinaryType.IMAGE:
+                        b64 = base64.b64encode(part.data).decode()
+                        parts.append({
+                            "type": "image",
+                            "source": {"type": "base64", "media_type": part.media_type, "data": b64},
+                        })
+                    elif isinstance(part, UrlInput) and part.kind is BinaryType.IMAGE:
+                        parts.append({"type": "image", "source": {"type": "url", "url": part.url}})
                     else:
                         raise UnsupportedInputError(type(part).__name__, "anthropic")
-                tool_content: str | list[dict[str, Any]] = parts[0]["text"] if len(parts) == 1 else parts
+
+                if len(parts) == 1 and parts[0]["type"] == "text":
+                    tool_content: str | list[dict[str, Any]] = parts[0]["text"]
+                else:
+                    tool_content = parts
                 tool_results.append({
                     "type": "tool_result",
                     "tool_use_id": r.parent_id,
