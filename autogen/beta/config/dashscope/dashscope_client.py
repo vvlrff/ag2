@@ -110,14 +110,9 @@ class DashScopeClient(LLMClient):
         choice = response.output.choices[0]
         msg = choice.message
 
-        # Use .get() because SDK's DictMixin.__getattr__ raises KeyError, not AttributeError
-        # (Mark Sze) Have raised a PR to fix: https://github.com/dashscope/dashscope-sdk-python/pull/115
         if reasoning := msg.get("reasoning_content"):
             await context.send(ModelReasoning(reasoning))
 
-        # MultiModalConversation returns content either as a plain string or
-        # as a list of blocks (`[{"text": "..."}]`). Emit one ModelMessage per
-        # text block — no joining — and carry the last one into ModelResponse.
         model_msg: ModelMessage | None = None
         content = msg.get("content")
         if isinstance(content, str) and content:

@@ -87,15 +87,27 @@ def convert_messages(
 
         elif isinstance(message, ToolResultsEvent):
             for r in message.results:
-                parts: list[dict[str, Any]] = []
+                blocks: list[dict[str, str]] = []
+                has_non_text = False
                 for part in r.result.parts:
                     if isinstance(part, TextInput):
-                        parts.append({"type": "text", "text": part.content})
+                        blocks.append({"text": part.content})
                     elif isinstance(part, DataInput):
-                        parts.append({"type": "text", "text": serializer.encode(part.data).decode()})
+                        blocks.append({"text": serializer.encode(part.data).decode()})
+                    elif isinstance(part, BinaryInput) and part.kind is BinaryType.IMAGE:
+                        b64 = base64.b64encode(part.data).decode()
+                        blocks.append({"image": f"data:{part.media_type};base64,{b64}"})
+                        has_non_text = True
+                    elif isinstance(part, UrlInput) and part.kind is BinaryType.IMAGE:
+                        blocks.append({"image": part.url})
+                        has_non_text = True
                     else:
                         raise UnsupportedInputError(type(part).__name__, "dashscope")
-                content = parts[0]["text"] if len(parts) == 1 and parts[0]["type"] == "text" else parts
+
+                if not has_non_text and len(blocks) == 1:
+                    content: str | list[dict[str, str]] = blocks[0]["text"]
+                else:
+                    content = blocks
                 result.append({"role": "tool", "tool_call_id": r.parent_id, "content": content})
 
     return result
