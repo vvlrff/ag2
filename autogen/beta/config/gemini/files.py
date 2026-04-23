@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from google import genai
 
-from autogen.beta.files.types import FileContent, UploadedFile
+from autogen.beta.files.types import FileContent, FileProvider, UploadedFile
 
 if TYPE_CHECKING:
     from autogen.beta.config.gemini.config import GeminiConfig
@@ -40,7 +40,7 @@ class GeminiFilesClient:
         return UploadedFile(
             file_id=result.name,
             filename=filename,
-            provider="gemini",
+            provider=FileProvider.GEMINI,
             bytes_count=result.size_bytes if hasattr(result, "size_bytes") else len(data),
             purpose=purpose,
             created_at=str(result.create_time) if hasattr(result, "create_time") else None,
@@ -58,7 +58,7 @@ class GeminiFilesClient:
             UploadedFile(
                 file_id=f.name,
                 filename=f.display_name if hasattr(f, "display_name") else None,
-                provider="gemini",
+                provider=FileProvider.GEMINI,
                 bytes_count=f.size_bytes if hasattr(f, "size_bytes") else None,
                 purpose=None,
                 created_at=str(f.create_time) if hasattr(f, "create_time") else None,

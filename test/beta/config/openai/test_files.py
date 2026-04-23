@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from autogen.beta.config.openai.files import OpenAIFilesClient
-from autogen.beta.files.types import FileContent, UploadedFile
+from autogen.beta.files.types import FileContent, FileProvider, UploadedFile
 
 
 @pytest.mark.asyncio
@@ -30,7 +30,7 @@ class TestOpenAIFilesClient:
         assert result == UploadedFile(
             file_id="file-abc",
             filename="test.pdf",
-            provider="openai",
+            provider=FileProvider.OPENAI,
             bytes_count=2048,
             purpose="assistants",
             created_at=str(1700000000),
@@ -76,7 +76,7 @@ class TestOpenAIFilesClient:
             UploadedFile(
                 file_id="file-1",
                 filename="a.txt",
-                provider="openai",
+                provider=FileProvider.OPENAI,
                 bytes_count=100,
                 purpose="assistants",
                 created_at=None,
@@ -84,7 +84,7 @@ class TestOpenAIFilesClient:
             UploadedFile(
                 file_id="file-2",
                 filename="b.csv",
-                provider="openai",
+                provider=FileProvider.OPENAI,
                 bytes_count=200,
                 purpose="fine-tune",
                 created_at=str(1700000000),

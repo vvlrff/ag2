@@ -3,6 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from .api import FilesAPI
-from .types import FileContent, UploadedFile
+from .types import FileContent, FileProvider, UploadedFile
 
-__all__ = ("FileContent", "FilesAPI", "UploadedFile")
+__all__ = (
+    "FileContent",
+    "FileProvider",
+    "FilesAPI",
+    "UploadedFile",
+)

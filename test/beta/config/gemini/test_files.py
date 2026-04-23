@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from autogen.beta.config.gemini.files import GeminiFilesClient
-from autogen.beta.files.types import UploadedFile
+from autogen.beta.files.types import FileProvider, UploadedFile
 
 
 @pytest.mark.asyncio
@@ -28,7 +28,7 @@ class TestGeminiFilesClient:
         assert result == UploadedFile(
             file_id="files/abc123",
             filename="recording.mp3",
-            provider="gemini",
+            provider=FileProvider.GEMINI,
             bytes_count=512,
             purpose=None,
             created_at="2025-01-01T00:00:00Z",
@@ -60,7 +60,7 @@ class TestGeminiFilesClient:
             UploadedFile(
                 file_id="files/1",
                 filename="doc.pdf",
-                provider="gemini",
+                provider=FileProvider.GEMINI,
                 bytes_count=100,
                 purpose=None,
                 created_at="2025-01-01",

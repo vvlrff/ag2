@@ -27,7 +27,7 @@ from autogen.beta.events import (
     VideoInput,
 )
 from autogen.beta.exceptions import UnsupportedInputError
-from autogen.beta.files.types import UploadedFile
+from autogen.beta.files.types import FileProvider, UploadedFile
 
 
 def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
@@ -278,13 +278,13 @@ class TestFileIdInput:
     def test_foreign_provider_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="'openai'.*anthropic"):
             convert_messages(
-                [ModelRequest([UploadedFile(file_id="file-abc", provider="openai")])],
+                [ModelRequest([UploadedFile(file_id="file-abc", provider=FileProvider.OPENAI)])],
                 SerializerCls,
             )
 
     def test_matching_provider_passes(self) -> None:
         result = convert_messages(
-            [ModelRequest([UploadedFile(file_id=self.FILE_ID, provider="anthropic")])],
+            [ModelRequest([UploadedFile(file_id=self.FILE_ID, provider=FileProvider.ANTHROPIC)])],
             SerializerCls,
         )
 

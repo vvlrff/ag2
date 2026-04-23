@@ -20,7 +20,7 @@ from autogen.beta.events import (
     TextInput,
 )
 from autogen.beta.exceptions import UnsupportedInputError
-from autogen.beta.files.types import UploadedFile
+from autogen.beta.files.types import FileProvider, UploadedFile
 
 
 class TestTextInput:
@@ -110,13 +110,13 @@ class TestFileIdInput:
     def test_responses_foreign_provider_raises(self) -> None:
         with pytest.raises(UnsupportedInputError, match="'anthropic'.*openai"):
             events_to_responses_input(
-                [ModelRequest([UploadedFile(file_id="file_011CNha8", provider="anthropic")])],
+                [ModelRequest([UploadedFile(file_id="file_011CNha8", provider=FileProvider.ANTHROPIC)])],
                 SerializerCls,
             )
 
     def test_responses_matching_provider_passes(self) -> None:
         result = events_to_responses_input(
-            [ModelRequest([UploadedFile(file_id=self.FILE_ID, provider="openai")])],
+            [ModelRequest([UploadedFile(file_id=self.FILE_ID, provider=FileProvider.OPENAI)])],
             SerializerCls,
         )
 

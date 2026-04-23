@@ -3,6 +3,7 @@
 # SPDX-License-Identifier: Apache-2.0
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING
 
 from autogen.beta.events.input_events import FileIdInput
@@ -18,8 +19,14 @@ class FileContent:
     media_type: str | None = None
 
 
+class FileProvider(str, Enum):
+    OPENAI = "openai"
+    ANTHROPIC = "anthropic"
+    GEMINI = "gemini"
+
+
 class UploadedFile(FileIdInput):
-    provider: str | None = None
+    provider: FileProvider | None = None
     bytes_count: int | None = None
     purpose: str | None = None
     created_at: str | None = None

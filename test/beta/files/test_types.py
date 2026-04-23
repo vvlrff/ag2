@@ -6,7 +6,7 @@ import pytest
 
 from autogen.beta.events import BinaryResult
 from autogen.beta.events.input_events import FileIdInput, Input
-from autogen.beta.files import FileContent, UploadedFile
+from autogen.beta.files import FileContent, FileProvider, UploadedFile
 
 
 class TestUploadedFile:
@@ -20,7 +20,7 @@ class TestUploadedFile:
         f = UploadedFile(
             file_id="file-123",
             filename="doc.pdf",
-            provider="openai",
+            provider=FileProvider.OPENAI,
             bytes_count=1024,
             purpose="assistants",
             created_at="2026-01-01T00:00:00Z",
@@ -29,7 +29,7 @@ class TestUploadedFile:
         assert f == UploadedFile(
             file_id="file-123",
             filename="doc.pdf",
-            provider="openai",
+            provider=FileProvider.OPENAI,
             bytes_count=1024,
             purpose="assistants",
             created_at="2026-01-01T00:00:00Z",

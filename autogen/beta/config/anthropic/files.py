@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from anthropic import AsyncAnthropic
 
-from autogen.beta.files.types import FileContent, UploadedFile
+from autogen.beta.files.types import FileContent, FileProvider, UploadedFile
 
 if TYPE_CHECKING:
     from autogen.beta.config.anthropic.config import AnthropicConfig
@@ -35,9 +35,9 @@ class AnthropicFilesClient:
         return UploadedFile(
             file_id=result.id,
             filename=result.filename if hasattr(result, "filename") else filename,
-            provider="anthropic",
+            provider=FileProvider.ANTHROPIC,
             bytes_count=result.size_bytes if hasattr(result, "size_bytes") else None,
-            purpose=None,
+            purpose=purpose,
             created_at=result.created_at if hasattr(result, "created_at") else None,
         )
 
@@ -56,7 +56,7 @@ class AnthropicFilesClient:
             UploadedFile(
                 file_id=f.id,
                 filename=f.filename if hasattr(f, "filename") else None,
-                provider="anthropic",
+                provider=FileProvider.ANTHROPIC,
                 bytes_count=f.size_bytes if hasattr(f, "size_bytes") else None,
                 purpose=None,
                 created_at=f.created_at if hasattr(f, "created_at") else None,

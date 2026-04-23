@@ -8,7 +8,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from autogen.beta.config.anthropic.files import AnthropicFilesClient
-from autogen.beta.files.types import FileContent, UploadedFile
+from autogen.beta.files.types import FileContent, FileProvider, UploadedFile
 
 
 @pytest.mark.asyncio
@@ -29,7 +29,7 @@ class TestAnthropicFilesClient:
         assert result == UploadedFile(
             file_id="file-011CNha8",
             filename="document.pdf",
-            provider="anthropic",
+            provider=FileProvider.ANTHROPIC,
             bytes_count=1024000,
             purpose=None,
             created_at="2025-01-01T00:00:00Z",
@@ -70,7 +70,7 @@ class TestAnthropicFilesClient:
             UploadedFile(
                 file_id="file-1",
                 filename="a.pdf",
-                provider="anthropic",
+                provider=FileProvider.ANTHROPIC,
                 bytes_count=100,
                 purpose=None,
                 created_at="2025-01-01T00:00:00Z",
