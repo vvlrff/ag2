@@ -42,7 +42,7 @@ class GeminiFilesClient:
             filename=filename,
             provider="gemini",
             bytes_count=result.size_bytes if hasattr(result, "size_bytes") else len(data),
-            purpose=None,
+            purpose=purpose,
             created_at=str(result.create_time) if hasattr(result, "create_time") else None,
         )
 
