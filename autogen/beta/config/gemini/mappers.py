@@ -229,7 +229,7 @@ def convert_messages(
                 elif isinstance(inp, FileIdInput):
                     if (provider := getattr(inp, "provider", None)) and provider is not FileProvider.GEMINI:
                         raise UnsupportedInputError(
-                            f"file uploaded via {provider} cannot be used with {FileProvider.GEMINI}",
+                            f"file uploaded via '{provider.value}' cannot be used with '{FileProvider.GEMINI.value}'",
                             "gemini",
                         )
                     file_uri = f"https://generativelanguage.googleapis.com/v1beta/{inp.file_id}"

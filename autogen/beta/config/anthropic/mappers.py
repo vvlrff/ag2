@@ -264,7 +264,7 @@ def convert_messages(
                 elif isinstance(inp, FileIdInput):
                     if (provider := getattr(inp, "provider", None)) and provider is not FileProvider.ANTHROPIC:
                         raise UnsupportedInputError(
-                            f"file uploaded via {provider} cannot be used with {FileProvider.ANTHROPIC}",
+                            f"file uploaded via '{provider.value}' cannot be used with '{FileProvider.ANTHROPIC.value}'",
                             "anthropic",
                         )
 

@@ -160,7 +160,7 @@ def events_to_responses_input(
                 elif isinstance(inp, FileIdInput):
                     if (provider := getattr(inp, "provider", None)) and provider is not FileProvider.OPENAI:
                         raise UnsupportedInputError(
-                            f"file uploaded via {provider} cannot be used with {FileProvider.OPENAI}",
+                            f"file uploaded via '{provider.value}' cannot be used with '{FileProvider.OPENAI.value}'",
                             "openai-responses",
                         )
                     # OpenAI Responses API: file_id and filename are mutually exclusive.
