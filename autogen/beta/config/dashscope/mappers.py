@@ -17,21 +17,6 @@ from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
 
 
-def extract_content_text(content: Any) -> str:
-    """Normalize MultiModalConversation content to a plain string.
-
-    Non-streaming responses return content as a list of blocks
-    (`[{'text': '...'}]`); streaming chunks may still be plain strings.
-    """
-    if not content:
-        return ""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        return "".join(block.get("text", "") for block in content if isinstance(block, dict))
-    return ""
-
-
 def response_proto_to_format(response: ResponseProto | None) -> dict[str, Any] | None:
     """Convert a ResponseProto to DashScope response_format (OpenAI-compatible)."""
     if not response or not response.json_schema:

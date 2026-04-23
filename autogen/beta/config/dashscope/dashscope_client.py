@@ -26,7 +26,7 @@ from autogen.beta.events import (
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import convert_messages, extract_content_text, response_proto_to_format, tool_to_api
+from .mappers import convert_messages, response_proto_to_format, tool_to_api
 
 DASHSCOPE_INTL_BASE_URL = "https://dashscope-intl.aliyuncs.com/api/v1"
 
@@ -115,10 +115,19 @@ class DashScopeClient(LLMClient):
         if reasoning := msg.get("reasoning_content"):
             await context.send(ModelReasoning(reasoning))
 
+        # MultiModalConversation returns content either as a plain string or
+        # as a list of blocks (`[{"text": "..."}]`). Emit one ModelMessage per
+        # text block — no joining — and carry the last one into ModelResponse.
         model_msg: ModelMessage | None = None
-        if content_text := extract_content_text(msg.get("content")):
-            model_msg = ModelMessage(content_text)
+        content = msg.get("content")
+        if isinstance(content, str) and content:
+            model_msg = ModelMessage(content)
             await context.send(model_msg)
+        elif isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and (text := block.get("text")):
+                    model_msg = ModelMessage(text)
+                    await context.send(model_msg)
 
         calls = []
         for tc in msg.get("tool_calls") or []:
@@ -193,9 +202,15 @@ class DashScopeClient(LLMClient):
                 if rc := msg.get("reasoning_content"):
                     await context.send(ModelReasoning(rc))
 
-                if c := extract_content_text(msg.get("content")):
-                    full_content += c
-                    await context.send(ModelMessageChunk(c))
+                content = msg.get("content")
+                if isinstance(content, str) and content:
+                    full_content += content
+                    await context.send(ModelMessageChunk(content))
+                elif isinstance(content, list):
+                    for block in content:
+                        if isinstance(block, dict) and (text := block.get("text")):
+                            full_content += text
+                            await context.send(ModelMessageChunk(text))
 
                 for tc in msg.get("tool_calls") or []:
                     args = tc["function"]["arguments"]

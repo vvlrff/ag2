@@ -201,7 +201,7 @@ class AnthropicClient(LLMClient):
         response: Message,
         context: "ConversationContext",
     ) -> ModelResponse:
-        text_parts: list[str] = []
+        model_msg: ModelMessage | None = None
         calls: list[ToolCallEvent] = []
 
         for block in response.content:
@@ -210,7 +210,8 @@ class AnthropicClient(LLMClient):
                     await context.send(ModelReasoning(block.thinking))
 
             elif isinstance(block, TextBlock):
-                text_parts.append(block.text)
+                model_msg = ModelMessage(block.text)
+                await context.send(model_msg)
 
             elif isinstance(block, ToolUseBlock):
                 calls.append(
@@ -220,11 +221,6 @@ class AnthropicClient(LLMClient):
                         arguments=json.dumps(block.input),
                     )
                 )
-
-        model_msg: ModelMessage | None = None
-        if text_parts:
-            model_msg = ModelMessage("\n\n".join(text_parts))
-            await context.send(model_msg)
 
         usage = normalize_usage(response.usage.model_dump() if response.usage else {})
 
