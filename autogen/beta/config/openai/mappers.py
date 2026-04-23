@@ -277,6 +277,9 @@ def convert_messages(
                     else:
                         raise UnsupportedInputError(f"UrlInput({inp.kind.value})", "openai-completions")
 
+                elif isinstance(inp, FileIdInput):
+                    parts.append({"type": "file", "file": {"file_id": inp.file_id}})
+
                 elif isinstance(inp, BinaryInput):
                     if inp.kind is BinaryType.AUDIO:
                         b64 = base64.b64encode(inp.data).decode()
@@ -287,6 +290,15 @@ def convert_messages(
                         b64 = base64.b64encode(inp.data).decode()
                         data_url = f"data:{inp.media_type};base64,{b64}"
                         parts.append({"type": "image_url", "image_url": {"url": data_url}, **inp.vendor_metadata})
+
+                    elif inp.kind is BinaryType.DOCUMENT:
+                        b64 = base64.b64encode(inp.data).decode()
+                        data_url = f"data:{inp.media_type};base64,{b64}"
+                        filename = inp.vendor_metadata.get("filename")
+                        if not filename:
+                            suffix = inp.media_type.rsplit("/", 1)[-1].split("+", 1)[0]
+                            filename = f"file.{suffix}"
+                        parts.append({"type": "file", "file": {"file_data": data_url, "filename": filename}})
 
                     else:
                         raise UnsupportedInputError(f"BinaryInput({inp.kind.value})", "openai-completions")

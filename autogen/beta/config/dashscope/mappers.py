@@ -92,11 +92,10 @@ def convert_messages(
 
             if not blocks:
                 continue
-            if has_non_text:
-                result.append({"role": "user", "content": blocks})
+            if not has_non_text and len(blocks) == 1:
+                result.append({"role": "user", "content": blocks[0]["text"]})
             else:
-                text = blocks[0]["text"] if len(blocks) == 1 else "\n".join(b["text"] for b in blocks)
-                result.append({"role": "user", "content": text})
+                result.append({"role": "user", "content": blocks})
 
         elif isinstance(message, ModelResponse):
             result.append(message.to_api())

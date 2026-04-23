@@ -199,11 +199,11 @@ def convert_messages(
                         result_parts.append(serializer.encode(part.data).decode())
                     else:
                         raise UnsupportedInputError(type(part).__name__, "gemini")
-                response_text = result_parts[0] if len(result_parts) == 1 else "\n".join(result_parts)
+                result_value = result_parts[0] if len(result_parts) == 1 else result_parts
                 parts_list.append(
                     types.Part.from_function_response(
                         name=r.name or "",
-                        response={"result": response_text},
+                        response={"result": result_value},
                     )
                 )
             result.append(types.Content(role="user", parts=parts_list))

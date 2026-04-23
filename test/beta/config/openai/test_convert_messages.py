@@ -48,14 +48,16 @@ class TestTextInput:
             SerializerCls,
         )
 
-        assert len(result) == 2  # system + one user message
-        assert result[1] == {
-            "role": "user",
-            "content": [
-                {"type": "text", "text": "describe this"},
-                {"type": "image_url", "image_url": {"url": image_url}},
-            ],
-        }
+        assert result == [
+            {"role": "system", "content": ""},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": "describe this"},
+                    {"type": "image_url", "image_url": {"url": image_url}},
+                ],
+            },
+        ]
 
 
 class TestImageUrlInput:
@@ -83,9 +85,24 @@ class TestImageUrlInput:
 class TestFileIdInput:
     FILE_ID = "file-6F2ksmvXxt4VdoqmHRw6kL"
 
-    def test_completions_raises(self) -> None:
-        with pytest.raises(UnsupportedInputError, match="FileIdInput.*openai-completions"):
-            convert_messages([], [ModelRequest([FileIdInput(file_id=self.FILE_ID)])], SerializerCls)
+    def test_completions(self) -> None:
+        result = convert_messages([], [ModelRequest([FileIdInput(file_id=self.FILE_ID)])], SerializerCls)
+
+        assert result[1] == {
+            "role": "user",
+            "content": [{"type": "file", "file": {"file_id": self.FILE_ID}}],
+        }
+
+    def test_completions_filename_forbidden_with_file_id(self) -> None:
+        """Chat Completions API rejects `filename` when `file_id` is present."""
+        result = convert_messages(
+            [], [ModelRequest([FileIdInput(file_id=self.FILE_ID, filename="report.pdf")])], SerializerCls
+        )
+
+        assert result[1] == {
+            "role": "user",
+            "content": [{"type": "file", "file": {"file_id": self.FILE_ID}}],
+        }
 
     def test_responses(self) -> None:
         result = events_to_responses_input([ModelRequest([FileIdInput(file_id=self.FILE_ID)])], SerializerCls)
@@ -233,6 +250,45 @@ class TestDocumentUrlInput:
                 "content": [{"type": "input_file", "file_url": self.DOC_URL}],
             }
         ]
+
+
+class TestDocumentBinaryInput:
+    SAMPLE_BYTES = b"%PDF-1.4 fake"
+
+    def test_completions_infers_filename_from_media_type(self) -> None:
+        result = convert_messages(
+            [],
+            [ModelRequest([DocumentInput(data=self.SAMPLE_BYTES, media_type="application/pdf")])],
+            SerializerCls,
+        )
+
+        expected_data = f"data:application/pdf;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
+        assert result[1] == {
+            "role": "user",
+            "content": [{"type": "file", "file": {"file_data": expected_data, "filename": "file.pdf"}}],
+        }
+
+    def test_completions_uses_vendor_metadata_filename(self) -> None:
+        result = convert_messages(
+            [],
+            [
+                ModelRequest([
+                    BinaryInput(
+                        data=self.SAMPLE_BYTES,
+                        media_type="application/pdf",
+                        vendor_metadata={"filename": "report.pdf"},
+                        kind=BinaryType.DOCUMENT,
+                    )
+                ])
+            ],
+            SerializerCls,
+        )
+
+        expected_data = f"data:application/pdf;base64,{base64.b64encode(self.SAMPLE_BYTES).decode()}"
+        assert result[1] == {
+            "role": "user",
+            "content": [{"type": "file", "file": {"file_data": expected_data, "filename": "report.pdf"}}],
+        }
 
 
 def test_data_input_in_model_request_becomes_input_text() -> None:

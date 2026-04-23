@@ -72,11 +72,16 @@ def convert_messages(
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "ollama")
 
-            if text_parts or images:
-                msg: dict[str, Any] = {"role": "user", "content": "\n".join(text_parts)}
-                if images:
-                    msg["images"] = images
-                result.append(msg)
+            # Ollama API only accepts plain-string `content`, so we emit one
+            # user message per TextInput instead of joining them. Images are
+            # attached to the last text message to keep them in the same turn.
+            for text in text_parts:
+                result.append({"role": "user", "content": text})
+            if images:
+                if text_parts:
+                    result[-1]["images"] = images
+                else:
+                    result.append({"role": "user", "content": "", "images": images})
 
         elif isinstance(message, ModelResponse):
             msg: dict[str, Any] = {

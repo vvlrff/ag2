@@ -128,3 +128,32 @@ class TestImageBinaryInput:
         result = convert_messages([], [ModelRequest([TextInput("hello")])], SerializerCls)
 
         assert result == [{"role": "user", "content": "hello"}]
+
+
+def test_multiple_text_inputs_emit_separate_messages() -> None:
+    """Multiple TextInput in one turn must not be joined; emit one user message each."""
+    result = convert_messages(
+        [], [ModelRequest([TextInput("first"), TextInput("second"), TextInput("third")])], SerializerCls
+    )
+
+    assert result == [
+        {"role": "user", "content": "first"},
+        {"role": "user", "content": "second"},
+        {"role": "user", "content": "third"},
+    ]
+
+
+def test_multiple_text_inputs_with_images_attach_to_last() -> None:
+    """Images must attach to the last TextInput to stay within the same turn."""
+    png = b"\x89PNG\r\n"
+    result = convert_messages(
+        [],
+        [ModelRequest([TextInput("intro"), TextInput("look at this"), ImageInput(data=png, media_type="image/png")])],
+        SerializerCls,
+    )
+
+    b64 = base64.b64encode(png).decode()
+    assert result == [
+        {"role": "user", "content": "intro"},
+        {"role": "user", "content": "look at this", "images": [b64]},
+    ]
