@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 
 
 class AnthropicFilesClient:
+    """Files API client for Anthropic."""
+
     __slots__ = ("_client",)
 
     def __init__(self, config: "AnthropicConfig") -> None:

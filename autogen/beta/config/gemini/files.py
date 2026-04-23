@@ -2,8 +2,8 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
-import tempfile
-from pathlib import Path
+import io
+import mimetypes
 from typing import TYPE_CHECKING
 
 from google import genai
@@ -15,11 +15,7 @@ if TYPE_CHECKING:
 
 
 class GeminiFilesClient:
-    """Files API client for Google Gemini.
-
-    Note: Gemini does not support downloading file content.
-    Files are stored for 48 hours and then automatically deleted.
-    """
+    """Files API client for Google Gemini."""
 
     __slots__ = ("_client",)
 
@@ -27,15 +23,9 @@ class GeminiFilesClient:
         self._client = genai.Client(api_key=config.api_key)
 
     async def upload(self, data: bytes, filename: str, purpose: str | None = None) -> UploadedFile:
-        suffix = Path(filename).suffix
-        with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
-            tmp.write(data)
-            tmp_path = tmp.name
-
-        try:
-            result = self._client.files.upload(file=tmp_path)
-        finally:
-            Path(tmp_path).unlink(missing_ok=True)
+        mime_type, _ = mimetypes.guess_type(filename)
+        config = {"display_name": filename, "mime_type": mime_type or "application/octet-stream"}
+        result = await self._client.aio.files.upload(file=io.BytesIO(data), config=config)
 
         return UploadedFile(
             file_id=result.name,
@@ -47,24 +37,32 @@ class GeminiFilesClient:
         )
 
     async def read(self, file_id: str) -> FileContent:
-        raise NotImplementedError(
-            "Gemini Files API does not support downloading file content. "
-            "Files can only be used as input to generate_content calls."
+        file_info = await self._client.aio.files.get(name=file_id)
+        if file_info.download_uri is None:
+            raise NotImplementedError(
+                "Gemini does not allow downloading user-uploaded files. "
+                "Only model-generated files with a download_uri can be downloaded."
+            )
+        data = await self._client.aio.files.download(file=file_info)
+        return FileContent(
+            name=file_info.display_name if file_info.display_name else None,
+            data=data,
+            media_type=file_info.mime_type if file_info.mime_type else None,
         )
 
     async def list(self) -> list[UploadedFile]:
-        result = self._client.files.list()
+        pager = await self._client.aio.files.list()
         return [
             UploadedFile(
                 file_id=f.name,
-                filename=f.display_name if hasattr(f, "display_name") else None,
+                filename=f.display_name if f.display_name else None,
                 provider=FileProvider.GEMINI,
-                bytes_count=f.size_bytes if hasattr(f, "size_bytes") else None,
+                bytes_count=f.size_bytes if f.size_bytes else None,
                 purpose=None,
                 created_at=str(f.create_time) if hasattr(f, "create_time") else None,
             )
-            for f in result
+            for f in pager.page
         ]
 
     async def delete(self, file_id: str) -> None:
-        self._client.files.delete(name=file_id)
+        await self._client.aio.files.delete(name=file_id)
