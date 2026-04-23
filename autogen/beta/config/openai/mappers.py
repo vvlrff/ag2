@@ -177,12 +177,11 @@ def events_to_responses_input(
                     else:
                         raise UnsupportedInputError(type(part).__name__, "openai-responses")
 
-                if all(b["type"] == "output_text" for b in blocks):
-                    text = blocks[0]["text"] if len(blocks) == 1 else "\n".join(b["text"] for b in blocks)
+                if len(blocks) == 1 and (block := blocks[0)["type"] == "output_text":
                     result.append({
                         "type": "function_call_output",
                         "call_id": r.parent_id,
-                        "output": text,
+                        "output": block["text"],
                     })
                 else:
                     result.append({
