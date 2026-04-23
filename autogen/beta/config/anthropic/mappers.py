@@ -288,8 +288,8 @@ def convert_messages(
                     else:
                         raise UnsupportedInputError(type(part).__name__, "anthropic")
 
-                if len(parts) == 1 and parts[0]["type"] == "text":
-                    tool_content: str | list[dict[str, Any]] = parts[0]["text"]
+                if len(parts) == 1 and (part := parts[0])["type"] == "text":
+                    tool_content: str | list[dict[str, Any]] = part["text"]
                 else:
                     tool_content = parts
                 tool_results.append({
@@ -349,7 +349,11 @@ def convert_messages(
                     raise UnsupportedInputError(type(inp).__name__, "anthropic")
 
             if content_parts:
-                result.append({"role": "user", "content": content_parts})
+                if len(content_parts) == 1 and (part := content_parts[0])["type"] == "text":
+                    content: str | list[dict[str, Any]] = part["text"]
+                else:
+                    content = content_parts
+                result.append({"role": "user", "content": content})
 
     return result
 
