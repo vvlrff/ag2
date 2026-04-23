@@ -211,6 +211,22 @@ def _file_id_block_type(filename: str | None) -> str:
     return "document"
 
 
+def has_file_id_references(messages: Iterable[BaseEvent]) -> bool:
+    """True if any message (user turn or tool result) references a file_id.
+
+    Used by the client to auto-inject the `files-api-2025-04-14` beta header.
+    """
+    for msg in messages:
+        if isinstance(msg, ModelRequest):
+            if any(isinstance(p, FileIdInput) for p in msg.parts):
+                return True
+        elif isinstance(msg, ToolResultsEvent):
+            for r in msg.results:
+                if any(isinstance(p, FileIdInput) for p in r.result.parts):
+                    return True
+    return False
+
+
 def convert_messages(
     messages: Iterable[BaseEvent],
     serializer: SerializerProto,
@@ -241,14 +257,34 @@ def convert_messages(
                         parts.append({"type": "text", "text": part.content})
                     elif isinstance(part, DataInput):
                         parts.append({"type": "text", "text": serializer.encode(part.data).decode()})
-                    elif isinstance(part, BinaryInput) and part.kind is BinaryType.IMAGE:
-                        b64 = base64.b64encode(part.data).decode()
+                    elif isinstance(part, BinaryInput):
+                        if part.kind is BinaryType.IMAGE:
+                            b64 = base64.b64encode(part.data).decode()
+                            parts.append({
+                                "type": "image",
+                                "source": {"type": "base64", "media_type": part.media_type, "data": b64},
+                            })
+                        elif part.kind is BinaryType.DOCUMENT:
+                            b64 = base64.b64encode(part.data).decode()
+                            parts.append({
+                                "type": "document",
+                                "source": {"type": "base64", "media_type": part.media_type, "data": b64},
+                            })
+                        else:
+                            raise UnsupportedInputError(f"BinaryInput({part.kind.value})", "anthropic")
+                    elif isinstance(part, UrlInput):
+                        if part.kind is BinaryType.IMAGE:
+                            parts.append({"type": "image", "source": {"type": "url", "url": part.url}})
+                        elif part.kind in (BinaryType.DOCUMENT, BinaryType.BINARY):
+                            parts.append({"type": "document", "source": {"type": "url", "url": part.url}})
+                        else:
+                            raise UnsupportedInputError(f"UrlInput({part.kind.value})", "anthropic")
+                    elif isinstance(part, FileIdInput):
+                        block_type = _file_id_block_type(part.filename)
                         parts.append({
-                            "type": "image",
-                            "source": {"type": "base64", "media_type": part.media_type, "data": b64},
+                            "type": block_type,
+                            "source": {"type": "file", "file_id": part.file_id},
                         })
-                    elif isinstance(part, UrlInput) and part.kind is BinaryType.IMAGE:
-                        parts.append({"type": "image", "source": {"type": "url", "url": part.url}})
                     else:
                         raise UnsupportedInputError(type(part).__name__, "anthropic")
 

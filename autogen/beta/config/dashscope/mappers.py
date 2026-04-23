@@ -2,18 +2,34 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+import base64
 from collections.abc import Iterable
 from typing import Any
 
 from fast_depends.library.serializer import SerializerProto
 
 from autogen.beta.events import BaseEvent, ModelRequest, ModelResponse, TextInput, ToolResultsEvent
-from autogen.beta.events.input_events import DataInput
+from autogen.beta.events.input_events import BinaryInput, BinaryType, DataInput, UrlInput
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.skills import SkillsToolSchema
 from autogen.beta.tools.final import FunctionToolSchema
 from autogen.beta.tools.schemas import ToolSchema
+
+
+def extract_content_text(content: Any) -> str:
+    """Normalize MultiModalConversation content to a plain string.
+
+    Non-streaming responses return content as a list of blocks
+    (`[{'text': '...'}]`); streaming chunks may still be plain strings.
+    """
+    if not content:
+        return ""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(block.get("text", "") for block in content if isinstance(block, dict))
+    return ""
 
 
 def response_proto_to_format(response: ResponseProto | None) -> dict[str, Any] | None:
@@ -57,13 +73,30 @@ def convert_messages(
 
     for message in messages:
         if isinstance(message, ModelRequest):
+            blocks: list[dict[str, str]] = []
+            has_non_text = False
             for inp in message.parts:
                 if isinstance(inp, TextInput):
-                    result.append(inp.to_api())
+                    blocks.append({"text": inp.content})
                 elif isinstance(inp, DataInput):
-                    result.append({"role": "user", "content": serializer.encode(inp.data).decode()})
+                    blocks.append({"text": serializer.encode(inp.data).decode()})
+                elif isinstance(inp, BinaryInput) and inp.kind is BinaryType.IMAGE:
+                    b64 = base64.b64encode(inp.data).decode()
+                    blocks.append({"image": f"data:{inp.media_type};base64,{b64}"})
+                    has_non_text = True
+                elif isinstance(inp, UrlInput) and inp.kind is BinaryType.IMAGE:
+                    blocks.append({"image": inp.url})
+                    has_non_text = True
                 else:
                     raise UnsupportedInputError(type(inp).__name__, "dashscope")
+
+            if not blocks:
+                continue
+            if has_non_text:
+                result.append({"role": "user", "content": blocks})
+            else:
+                text = blocks[0]["text"] if len(blocks) == 1 else "\n".join(b["text"] for b in blocks)
+                result.append({"role": "user", "content": text})
 
         elif isinstance(message, ModelResponse):
             result.append(message.to_api())

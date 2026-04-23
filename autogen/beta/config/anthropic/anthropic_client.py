@@ -37,6 +37,7 @@ from .mappers import (
     convert_messages,
     extract_mcp_servers,
     extract_skills_for_container,
+    has_file_id_references,
     normalize_usage,
     response_proto_to_output_config,
     tool_to_api,
@@ -139,6 +140,13 @@ class AnthropicClient(LLMClient):
             )
             existing_betas.discard("")
             existing_betas.update(["code-execution-2025-08-25", "skills-2025-10-02"])
+            create_kwargs.setdefault("extra_headers", {})
+            create_kwargs["extra_headers"]["anthropic-beta"] = ",".join(sorted(existing_betas))
+
+        if has_file_id_references(messages):
+            existing_betas = set((create_kwargs.get("extra_headers") or {}).get("anthropic-beta", "").split(","))
+            existing_betas.discard("")
+            existing_betas.add("files-api-2025-04-14")
             create_kwargs.setdefault("extra_headers", {})
             create_kwargs["extra_headers"]["anthropic-beta"] = ",".join(sorted(existing_betas))
 

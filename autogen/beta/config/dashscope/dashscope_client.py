@@ -8,7 +8,7 @@ from itertools import chain
 from typing import Any, TypedDict
 
 import dashscope
-from dashscope.aigc.generation import AioGeneration
+from dashscope import AioMultiModalConversation
 from fast_depends.library.serializer import SerializerProto
 
 from autogen.beta.config.client import LLMClient
@@ -26,7 +26,7 @@ from autogen.beta.events import (
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.schemas import ToolSchema
 
-from .mappers import convert_messages, response_proto_to_format, tool_to_api
+from .mappers import convert_messages, extract_content_text, response_proto_to_format, tool_to_api
 
 DASHSCOPE_INTL_BASE_URL = "https://dashscope-intl.aliyuncs.com/api/v1"
 
@@ -97,7 +97,7 @@ class DashScopeClient(LLMClient):
         kwargs: dict[str, Any],
         context: "ConversationContext",
     ) -> ModelResponse:
-        response = await AioGeneration.call(
+        response = await AioMultiModalConversation.call(
             model=self._model,
             messages=messages,
             api_key=self._api_key,
@@ -116,8 +116,8 @@ class DashScopeClient(LLMClient):
             await context.send(ModelReasoning(reasoning))
 
         model_msg: ModelMessage | None = None
-        if content := msg.get("content"):
-            model_msg = ModelMessage(content)
+        if content_text := extract_content_text(msg.get("content")):
+            model_msg = ModelMessage(content_text)
             await context.send(model_msg)
 
         calls = []
@@ -155,7 +155,7 @@ class DashScopeClient(LLMClient):
         kwargs: dict[str, Any],
         context: "ConversationContext",
     ) -> ModelResponse:
-        responses = await AioGeneration.call(
+        responses = await AioMultiModalConversation.call(
             model=self._model,
             messages=messages,
             api_key=self._api_key,
@@ -193,7 +193,7 @@ class DashScopeClient(LLMClient):
                 if rc := msg.get("reasoning_content"):
                     await context.send(ModelReasoning(rc))
 
-                if c := msg.get("content"):
+                if c := extract_content_text(msg.get("content")):
                     full_content += c
                     await context.send(ModelMessageChunk(c))
 
