@@ -408,6 +408,7 @@ optionals = [
 
 testing = [
     "ag2[test-core]",
+    "starlette",  # AG-UI tests require starlette
 ]
 
 lint = [
