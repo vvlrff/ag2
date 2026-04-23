@@ -31,10 +31,12 @@ from ag_ui.core import (
 from ag_ui.encoder import EventEncoder
 from anyio import create_memory_object_stream, create_task_group
 from anyio.streams.memory import MemoryObjectSendStream
+from fast_depends.library.serializer import SerializerProto
 from pydantic_core import to_jsonable_python
 
 from autogen.beta import Agent, MemoryStream, ToolResult, events
 from autogen.beta.config import ModelConfig
+from autogen.beta.events.input_events import BinaryInput, DataInput, FileIdInput, TextInput, UrlInput
 from autogen.beta.hitl import HumanHook
 from autogen.beta.middleware.base import MiddlewareFactory
 from autogen.beta.observer import Observer
@@ -221,7 +223,7 @@ async def run_stream(
             await write_events_stream.send(
                 ToolCallResultEvent(
                     tool_call_id=event.parent_id,
-                    content="/n".join(text_parts),
+                    content=_stringify_tool_result(event.result, agent._serializer),
                     message_id=str(uuid4()),
                     timestamp=_get_timestamp(),
                     role="tool",
@@ -382,6 +384,33 @@ def map_agui_messages_to_events(command: AGStreamInput) -> tuple[list[str], list
         messages.append(events.ModelRequest(input_buffer))
 
     return prompt, messages
+
+
+def _stringify_tool_result(result: ToolResult, serializer: SerializerProto) -> str:
+    """Flatten a multi-part ``ToolResult`` into a string for the AG-UI wire format.
+
+    AG-UI's ``ToolCallResultEvent.content`` is a plain string, but AG2 tool
+    results are now structured lists of ``Input`` parts (text, data, binary,
+    urls, file-ids). Collapse them here so any kind of tool return still
+    surfaces in the stream.
+    """
+    chunks: list[str] = []
+    for part in result.parts:
+        if isinstance(part, TextInput):
+            chunks.append(part.content)
+        elif isinstance(part, DataInput):
+            chunks.append(serializer.encode(part.data).decode())
+        elif isinstance(part, UrlInput):
+            chunks.append(part.url)
+        elif isinstance(part, FileIdInput):
+            chunks.append(f"[file:{part.file_id}]")
+        elif isinstance(part, BinaryInput):
+            chunks.append(f"[binary:{part.media_type} {len(part.data)}B]")
+        else:
+            chunks.append(repr(part))
+    if len(chunks) == 1:
+        return chunks[0]
+    return "\n".join(chunks)
 
 
 def _get_timestamp() -> int:
