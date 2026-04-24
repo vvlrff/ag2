@@ -19,6 +19,7 @@ from autogen.beta.events.input_events import (
 )
 from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
+from autogen.beta.files.types import FileProvider
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.mcp_server import MCPServerToolSchema
@@ -309,6 +310,12 @@ def convert_messages(
                     content_parts.append({"type": "text", "text": serializer.encode(inp.data).decode()})
 
                 elif isinstance(inp, FileIdInput):
+                    if (provider := getattr(inp, "provider", None)) and provider is not FileProvider.ANTHROPIC:
+                        raise UnsupportedInputError(
+                            f"file uploaded via '{provider.value}' cannot be used with '{FileProvider.ANTHROPIC.value}'",
+                            "anthropic",
+                        )
+
                     block_type = _file_id_block_type(inp.filename)
                     content_parts.append({"type": block_type, "source": {"type": "file", "file_id": inp.file_id}})
 
@@ -362,9 +369,12 @@ def normalize_usage(raw: dict[str, Any]) -> Usage:
     """Normalize Anthropic's native usage keys to standard format."""
     cc = raw.get("cache_creation_input_tokens")
     cr = raw.get("cache_read_input_tokens")
+    prompt = float(raw.get("input_tokens", 0))
+    completion = float(raw.get("output_tokens", 0))
     return Usage(
-        prompt_tokens=float(raw.get("input_tokens", 0)),
-        completion_tokens=float(raw.get("output_tokens", 0)),
+        prompt_tokens=prompt,
+        completion_tokens=completion,
+        total_tokens=prompt + completion,
         cache_creation_input_tokens=float(cc) if cc else None,
         cache_read_input_tokens=float(cr) if cr else None,
     )

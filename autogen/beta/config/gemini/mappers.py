@@ -15,10 +15,12 @@ from autogen.beta.events.input_events import (
     BinaryInput,
     BinaryType,
     DataInput,
+    FileIdInput,
     UrlInput,
 )
 from autogen.beta.events.types import Usage
 from autogen.beta.exceptions import UnsupportedInputError, UnsupportedToolError
+from autogen.beta.files.types import FileProvider
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.skills import SkillsToolSchema
@@ -240,6 +242,15 @@ def convert_messages(
                         parts.append(types.Part.from_uri(file_uri=inp.url, mime_type=mime))
                     else:
                         parts.append(types.Part(file_data=types.FileData(file_uri=inp.url)))
+
+                elif isinstance(inp, FileIdInput):
+                    if (provider := getattr(inp, "provider", None)) and provider is not FileProvider.GEMINI:
+                        raise UnsupportedInputError(
+                            f"file uploaded via '{provider.value}' cannot be used with '{FileProvider.GEMINI.value}'",
+                            "gemini",
+                        )
+                    file_uri = f"https://generativelanguage.googleapis.com/v1beta/{inp.file_id}"
+                    parts.append(types.Part(file_data=types.FileData(file_uri=file_uri)))
 
                 elif isinstance(inp, BinaryInput):
                     part = types.Part.from_bytes(data=inp.data, mime_type=inp.media_type)

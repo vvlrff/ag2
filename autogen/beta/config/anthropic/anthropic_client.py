@@ -28,6 +28,7 @@ from autogen.beta.events import (
     ToolCallEvent,
     ToolCallsEvent,
 )
+from autogen.beta.events.input_events import FileIdInput, ModelRequest
 from autogen.beta.response import ResponseProto
 from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.skills import SkillsToolSchema

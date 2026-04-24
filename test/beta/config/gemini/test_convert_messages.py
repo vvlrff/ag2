@@ -22,6 +22,7 @@ from autogen.beta.events import (
 )
 from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent
 from autogen.beta.exceptions import UnsupportedInputError
+from autogen.beta.files.types import FileProvider, UploadedFile
 
 
 def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
