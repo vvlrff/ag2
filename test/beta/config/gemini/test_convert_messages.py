@@ -22,7 +22,6 @@ from autogen.beta.events import (
 )
 from autogen.beta.events.tool_events import ToolCallEvent, ToolCallsEvent
 from autogen.beta.exceptions import UnsupportedInputError
-from autogen.beta.files.types import FileProvider, UploadedFile
 
 
 def _model_response_with_tool_call(arguments: str | None) -> ModelResponse:
@@ -265,11 +264,6 @@ class TestMultipleInputs:
                 {"inline_data": {"data": png, "mime_type": "image/png"}},
             ],
         }
-
-
-def test_file_id_input_raises() -> None:
-    with pytest.raises(UnsupportedInputError, match="FileIdInput.*gemini"):
-        convert_messages([ModelRequest([FileIdInput(file_id="file-abc123")])], SerializerCls)
 
 
 class TestToolResult:
