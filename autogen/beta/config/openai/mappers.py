@@ -10,6 +10,7 @@ from fast_depends.library.serializer import SerializerProto
 from openai.types import CompletionUsage
 from openai.types.responses import ResponseUsage
 
+from autogen.beta.config.openai.events import OpenAIReasoningEvent, OpenAIServerToolCallEvent
 from autogen.beta.events import (
     BaseEvent,
     BinaryInput,
@@ -190,6 +191,15 @@ def events_to_responses_input(
                         "call_id": r.parent_id,
                         "output": blocks,
                     })
+
+        elif isinstance(message, (OpenAIReasoningEvent, OpenAIServerToolCallEvent)):
+            # The Responses API requires reasoning items to accompany their
+            # paired server-side tool calls on replay. Both event types wrap
+            # the original SDK object, so we re-emit it verbatim as an input
+            # item; ``OpenAIServerToolResultEvent`` carries no payload because
+            # the Responses API represents a server-side tool as a single
+            # combined item, already covered by the call event above.
+            result.append(message.item.model_dump(exclude_none=True, mode="json"))
 
         elif isinstance(message, ModelRequest):
             for inp in message.parts:
