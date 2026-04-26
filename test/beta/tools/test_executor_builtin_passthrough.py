@@ -5,6 +5,7 @@
 from contextlib import ExitStack
 
 import pytest
+from fast_depends.use import SerializerCls
 
 from autogen.beta import MemoryStream, ToolResult
 from autogen.beta.context import ConversationContext
@@ -29,7 +30,7 @@ class TestToolNotFoundFallback:
         context = ConversationContext(stream=stream)
 
         with ExitStack() as stack:
-            ToolExecutor().register(stack, context, tools=[], known_tools={"known_func"})
+            ToolExecutor(SerializerCls).register(stack, context, tools=[], known_tools={"known_func"})
             await context.send(ToolCallEvent(id="tc_1", name="unknown_func", arguments="{}"))
 
         expected_err = ToolNotFoundError("unknown_func")
@@ -48,7 +49,7 @@ class TestToolNotFoundFallback:
         context = ConversationContext(stream=stream)
 
         with ExitStack() as stack:
-            ToolExecutor().register(stack, context, tools=[], known_tools={"known_func"})
+            ToolExecutor(SerializerCls).register(stack, context, tools=[], known_tools={"known_func"})
             await context.send(ToolCallEvent(id="tc_1", name="known_func", arguments="{}"))
 
         assert _not_found_events(list(await stream.history.get_events())) == []

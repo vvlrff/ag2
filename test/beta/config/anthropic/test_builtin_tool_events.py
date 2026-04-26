@@ -18,11 +18,8 @@ from anthropic.types import (
 from anthropic.types.bash_code_execution_tool_result_error import BashCodeExecutionToolResultError
 
 from autogen.beta import MemoryStream
-from autogen.beta.config.anthropic import (
-    AnthropicClient,
-    AnthropicServerToolCallEvent,
-    AnthropicServerToolResultEvent,
-)
+from autogen.beta.config.anthropic import AnthropicClient
+from autogen.beta.config.anthropic.events import AnthropicServerToolCallEvent, AnthropicServerToolResultEvent
 from autogen.beta.context import ConversationContext
 from autogen.beta.events import BaseEvent, ModelMessage, ModelResponse, ToolCallEvent, ToolCallsEvent
 from autogen.beta.events.tool_events import ToolResult
@@ -86,5 +83,4 @@ async def test_process_response_routes_all_block_types() -> None:
         AnthropicServerToolResultEvent(
             parent_id="b1", name=CODE_EXECUTION_TOOL_NAME, result=ToolResult(), block=bash_result
         ),
-        ModelMessage("Searching..."),
     ]

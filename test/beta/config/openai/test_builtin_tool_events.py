@@ -19,8 +19,8 @@ from openai.types.responses.response_output_item import ImageGenerationCall
 from openai.types.responses.response_output_text import ResponseOutputText
 
 from autogen.beta import MemoryStream
-from autogen.beta.config.openai import (
-    OpenAIResponsesClient,
+from autogen.beta.config.openai import OpenAIResponsesClient
+from autogen.beta.config.openai.events import (
     OpenAIServerToolCallEvent,
     OpenAIServerToolResultEvent,
 )
@@ -104,5 +104,4 @@ async def test_process_response_routes_all_item_types() -> None:
         OpenAIServerToolResultEvent(parent_id="ci_1", name=CODE_EXECUTION_TOOL_NAME, result=ToolResult()),
         OpenAIServerToolCallEvent(id="ig_1", name=IMAGE_GENERATION_TOOL_NAME, arguments="", item=image),
         OpenAIServerToolResultEvent(parent_id="ig_1", name=IMAGE_GENERATION_TOOL_NAME, result=ToolResult()),
-        ModelMessage("Done."),
     ]

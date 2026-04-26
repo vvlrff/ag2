@@ -19,10 +19,7 @@ from dirty_equals import IsPartialDict
 from fast_depends.use import SerializerCls
 
 from autogen.beta import ToolResult
-from autogen.beta.config.anthropic import (
-    AnthropicServerToolCallEvent,
-    AnthropicServerToolResultEvent,
-)
+from autogen.beta.config.anthropic.events import AnthropicServerToolCallEvent, AnthropicServerToolResultEvent
 from autogen.beta.config.anthropic.mappers import convert_messages
 from autogen.beta.events import (
     AudioInput,
@@ -608,7 +605,7 @@ class TestToolResult:
 )
 def test_unsupported_input_raises(input_factory: Callable[[], Any], match: str) -> None:
     with pytest.raises(UnsupportedInputError, match=match):
-        convert_messages([ModelRequest([input_factory()])])
+        convert_messages([ModelRequest([input_factory()])], SerializerCls)
 
 
 def _server_tool_use_block(
@@ -640,23 +637,29 @@ def _web_search_result_block(
 class TestAnthropicServerToolCallEvent:
     def test_emits_wrapped_sdk_block_as_assistant_content(self) -> None:
         block = _server_tool_use_block()
-        result = convert_messages([
-            AnthropicServerToolCallEvent(
-                id=block.id,
-                name="web_search",
-                arguments="{}",
-                block=block,
-            ),
-        ])
+        result = convert_messages(
+            [
+                AnthropicServerToolCallEvent(
+                    id=block.id,
+                    name="web_search",
+                    arguments="{}",
+                    block=block,
+                ),
+            ],
+            SerializerCls,
+        )
 
         assert result == [{"role": "assistant", "content": [block.model_dump(exclude_none=True, mode="json")]}]
 
     def test_appends_to_existing_assistant_message(self) -> None:
         block = _server_tool_use_block(input={"query": "test"})
-        result = convert_messages([
-            ModelResponse(message=ModelMessage("Let me search for that."), tool_calls=ToolCallsEvent()),
-            AnthropicServerToolCallEvent(id=block.id, name="web_search", arguments="{}", block=block),
-        ])
+        result = convert_messages(
+            [
+                ModelResponse(message=ModelMessage("Let me search for that."), tool_calls=ToolCallsEvent()),
+                AnthropicServerToolCallEvent(id=block.id, name="web_search", arguments="{}", block=block),
+            ],
+            SerializerCls,
+        )
 
         assert result == [
             {
@@ -672,29 +675,35 @@ class TestAnthropicServerToolCallEvent:
 class TestAnthropicServerToolResultEvent:
     def test_emits_wrapped_sdk_block_as_assistant_content(self) -> None:
         block = _web_search_result_block()
-        result = convert_messages([
-            AnthropicServerToolResultEvent(
-                parent_id=block.tool_use_id,
-                name="web_search",
-                result=ToolResult(),
-                block=block,
-            ),
-        ])
+        result = convert_messages(
+            [
+                AnthropicServerToolResultEvent(
+                    parent_id=block.tool_use_id,
+                    name="web_search",
+                    result=ToolResult(),
+                    block=block,
+                ),
+            ],
+            SerializerCls,
+        )
 
         assert result == [{"role": "assistant", "content": [block.model_dump(exclude_none=True, mode="json")]}]
 
     def test_call_and_result_blocks_stack_into_one_assistant_message(self) -> None:
         call_block = _server_tool_use_block(input={"query": "test"})
         result_block = _web_search_result_block()
-        result = convert_messages([
-            AnthropicServerToolCallEvent(id=call_block.id, name="web_search", arguments="{}", block=call_block),
-            AnthropicServerToolResultEvent(
-                parent_id=result_block.tool_use_id,
-                name="web_search",
-                result=ToolResult(),
-                block=result_block,
-            ),
-        ])
+        result = convert_messages(
+            [
+                AnthropicServerToolCallEvent(id=call_block.id, name="web_search", arguments="{}", block=call_block),
+                AnthropicServerToolResultEvent(
+                    parent_id=result_block.tool_use_id,
+                    name="web_search",
+                    result=ToolResult(),
+                    block=result_block,
+                ),
+            ],
+            SerializerCls,
+        )
 
         assert result == [
             {
@@ -724,10 +733,10 @@ def test_full_sequence_round_trip() -> None:
         ModelRequest([TextInput("What was the exact price?")]),
     ]
 
-    result = convert_messages(events)
+    result = convert_messages(events, SerializerCls)
 
     assert result == [
-        {"role": "user", "content": [{"type": "text", "text": "Search for bitcoin price"}]},
+        {"role": "user", "content": "Search for bitcoin price"},
         {
             "role": "assistant",
             "content": [
@@ -736,7 +745,7 @@ def test_full_sequence_round_trip() -> None:
             ],
         },
         {"role": "assistant", "content": [{"type": "text", "text": "Bitcoin is $74,000."}]},
-        {"role": "user", "content": [{"type": "text", "text": "What was the exact price?"}]},
+        {"role": "user", "content": "What was the exact price?"},
     ]
 
 
@@ -785,12 +794,15 @@ def test_code_execution_subtool_preserves_block_shape(
 ) -> None:
     """Anthropic's code_execution tool reports results via sub-tool-specific block
     types. The typed event preserves the original block shape so replay stays lossless."""
-    result = convert_messages([
-        AnthropicServerToolCallEvent(id=call_block.id, name="code_execution", arguments="{}", block=call_block),
-        AnthropicServerToolResultEvent(
-            parent_id=result_block.tool_use_id, name="code_execution", result=ToolResult(), block=result_block
-        ),
-    ])
+    result = convert_messages(
+        [
+            AnthropicServerToolCallEvent(id=call_block.id, name="code_execution", arguments="{}", block=call_block),
+            AnthropicServerToolResultEvent(
+                parent_id=result_block.tool_use_id, name="code_execution", result=ToolResult(), block=result_block
+            ),
+        ],
+        SerializerCls,
+    )
 
     assert result == [
         {

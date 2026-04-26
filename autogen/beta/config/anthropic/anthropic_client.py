@@ -10,16 +10,11 @@ from typing import Any, TypedDict
 import httpx
 from anthropic import NOT_GIVEN, AsyncAnthropic
 from anthropic.types import (
-    BashCodeExecutionToolResultBlock,
-    CodeExecutionToolResultBlock,
     Message,
     ServerToolUseBlock,
     TextBlock,
-    TextEditorCodeExecutionToolResultBlock,
     ThinkingBlock,
     ToolUseBlock,
-    WebFetchToolResultBlock,
-    WebSearchToolResultBlock,
 )
 from fast_depends.library.serializer import SerializerProto
 
@@ -34,12 +29,9 @@ from autogen.beta.events import (
     ToolCallEvent,
     ToolCallsEvent,
 )
-from autogen.beta.events.tool_events import ToolResult
 from autogen.beta.response import ResponseProto
-from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME, CodeExecutionToolSchema
+from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.skills import SkillsToolSchema
-from autogen.beta.tools.builtin.web_fetch import WEB_FETCH_TOOL_NAME
-from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 from autogen.beta.tools.schemas import ToolSchema
 
 from .events import AnthropicServerToolCallEvent, AnthropicServerToolResultEvent
@@ -52,24 +44,6 @@ from .mappers import (
     response_proto_to_output_config,
     tool_to_api,
 )
-
-_CALL_TOOL_NAME: dict[str, str] = {
-    "web_search": WEB_SEARCH_TOOL_NAME,
-    "web_fetch": WEB_FETCH_TOOL_NAME,
-    "code_execution": CODE_EXECUTION_TOOL_NAME,
-    "bash_code_execution": CODE_EXECUTION_TOOL_NAME,
-    "text_editor_code_execution": CODE_EXECUTION_TOOL_NAME,
-}
-
-_RESULT_TOOL_NAME: dict[type, str] = {
-    WebSearchToolResultBlock: WEB_SEARCH_TOOL_NAME,
-    WebFetchToolResultBlock: WEB_FETCH_TOOL_NAME,
-    CodeExecutionToolResultBlock: CODE_EXECUTION_TOOL_NAME,
-    BashCodeExecutionToolResultBlock: CODE_EXECUTION_TOOL_NAME,
-    TextEditorCodeExecutionToolResultBlock: CODE_EXECUTION_TOOL_NAME,
-}
-
-_RESULT_BLOCK_TYPES = tuple(_RESULT_TOOL_NAME)
 
 
 class CreateOptions(TypedDict, total=False):
@@ -216,23 +190,10 @@ class AnthropicClient(LLMClient):
         """Emit typed server-tool events for server-side tool blocks."""
         for block in content_blocks:
             if isinstance(block, ServerToolUseBlock):
-                await context.send(
-                    AnthropicServerToolCallEvent(
-                        id=block.id,
-                        name=_CALL_TOOL_NAME[block.name],
-                        arguments=json.dumps(block.input),
-                        block=block,
-                    )
-                )
-            elif isinstance(block, _RESULT_BLOCK_TYPES):
-                await context.send(
-                    AnthropicServerToolResultEvent(
-                        parent_id=block.tool_use_id,
-                        name=_RESULT_TOOL_NAME[type(block)],
-                        result=ToolResult(),
-                        block=block,
-                    )
-                )
+                if call_event := AnthropicServerToolCallEvent.from_block(block):
+                    await context.send(call_event)
+            elif (result_event := AnthropicServerToolResultEvent.from_block(block)) is not None:
+                await context.send(result_event)
 
     def _build_system(self, prompt: Iterable[str]) -> Any:
         text = "\n".join(prompt)
@@ -278,24 +239,11 @@ class AnthropicClient(LLMClient):
                 )
 
             elif isinstance(block, ServerToolUseBlock):
-                await context.send(
-                    AnthropicServerToolCallEvent(
-                        id=block.id,
-                        name=_CALL_TOOL_NAME[block.name],
-                        arguments=json.dumps(block.input),
-                        block=block,
-                    )
-                )
+                if call_event := AnthropicServerToolCallEvent.from_block(block):
+                    await context.send(call_event)
 
-            elif isinstance(block, _RESULT_BLOCK_TYPES):
-                await context.send(
-                    AnthropicServerToolResultEvent(
-                        parent_id=block.tool_use_id,
-                        name=_RESULT_TOOL_NAME[type(block)],
-                        result=ToolResult(),
-                        block=block,
-                    )
-                )
+            elif (result_event := AnthropicServerToolResultEvent.from_block(block)) is not None:
+                await context.send(result_event)
 
         usage = normalize_usage(response.usage.model_dump() if response.usage else {})
 
@@ -331,23 +279,10 @@ class AnthropicClient(LLMClient):
                         "arguments": "",
                     }
                 elif block_type == "server_tool_use":
-                    await context.send(
-                        AnthropicServerToolCallEvent(
-                            id=block.id,
-                            name=_CALL_TOOL_NAME[block.name],
-                            arguments=json.dumps(block.input),
-                            block=block,
-                        )
-                    )
-                elif isinstance(block, _RESULT_BLOCK_TYPES):
-                    await context.send(
-                        AnthropicServerToolResultEvent(
-                            parent_id=block.tool_use_id,
-                            name=_RESULT_TOOL_NAME[type(block)],
-                            result=ToolResult(),
-                            block=block,
-                        )
-                    )
+                    if call_event := AnthropicServerToolCallEvent.from_block(block):
+                        await context.send(call_event)
+                elif (result_event := AnthropicServerToolResultEvent.from_block(block)) is not None:
+                    await context.send(result_event)
 
             elif event_type == "content_block_delta":
                 delta = event.delta

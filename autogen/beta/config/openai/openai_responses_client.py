@@ -4,7 +4,6 @@
 
 
 import base64
-import json
 from collections.abc import Iterable, Sequence
 from itertools import chain
 from typing import Any, TypedDict
@@ -15,10 +14,8 @@ from openai import DEFAULT_MAX_RETRIES, AsyncOpenAI, AsyncStream, not_given, omi
 from openai.types import ChatModel
 from openai.types.responses import (
     Response,
-    ResponseCodeInterpreterToolCall,
     ResponseCompletedEvent,
     ResponseFunctionToolCall,
-    ResponseFunctionWebSearch,
     ResponseOutputItemDoneEvent,
     ResponseOutputMessage,
     ResponseReasoningItem,
@@ -41,10 +38,6 @@ from autogen.beta.events import (
     Usage,
 )
 from autogen.beta.response import ResponseProto
-from autogen.beta.tools import ToolResult
-from autogen.beta.tools.builtin.code_execution import CODE_EXECUTION_TOOL_NAME
-from autogen.beta.tools.builtin.image_generation import IMAGE_GENERATION_TOOL_NAME
-from autogen.beta.tools.builtin.web_search import WEB_SEARCH_TOOL_NAME
 from autogen.beta.tools.schemas import ToolSchema
 
 from .events import OpenAIReasoningEvent, OpenAIServerToolCallEvent, OpenAIServerToolResultEvent
@@ -160,40 +153,6 @@ class OpenAIResponsesClient(LLMClient):
                         model_msg = ModelMessage(part.text)
                         await context.send(model_msg)
 
-            elif isinstance(item, ResponseFunctionWebSearch):
-                await context.send(
-                    OpenAIServerToolCallEvent(
-                        id=item.id,
-                        name=WEB_SEARCH_TOOL_NAME,
-                        arguments=item.action.model_dump_json(),
-                        item=item,
-                    )
-                )
-                await context.send(
-                    OpenAIServerToolResultEvent(
-                        parent_id=item.id,
-                        name=WEB_SEARCH_TOOL_NAME,
-                        result=ToolResult(),
-                    )
-                )
-
-            elif isinstance(item, ResponseCodeInterpreterToolCall):
-                await context.send(
-                    OpenAIServerToolCallEvent(
-                        id=item.id,
-                        name=CODE_EXECUTION_TOOL_NAME,
-                        arguments=json.dumps({"code": item.code}) if item.code is not None else "{}",
-                        item=item,
-                    )
-                )
-                await context.send(
-                    OpenAIServerToolResultEvent(
-                        parent_id=item.id,
-                        name=CODE_EXECUTION_TOOL_NAME,
-                        result=ToolResult(),
-                    )
-                )
-
             elif isinstance(item, ResponseFunctionToolCall):
                 calls.append(
                     ToolCallEvent(
@@ -203,27 +162,17 @@ class OpenAIResponsesClient(LLMClient):
                     )
                 )
 
-            elif isinstance(item, ImageGenerationCall) and item.result:
-                result = BinaryResult(
-                    base64.b64decode(item.result),
-                    metadata=item.model_dump(exclude={"result", "status", "type"}),
-                )
-                await context.send(
-                    OpenAIServerToolCallEvent(
-                        id=item.id,
-                        name=IMAGE_GENERATION_TOOL_NAME,
-                        arguments="",
-                        item=item,
+            elif call_event := OpenAIServerToolCallEvent.from_item(item):
+                await context.send(call_event)
+                if result_event := OpenAIServerToolResultEvent.from_item(item, parent_id=call_event.id):
+                    await context.send(result_event)
+                if isinstance(item, ImageGenerationCall) and item.result:
+                    files.append(
+                        BinaryResult(
+                            base64.b64decode(item.result),
+                            metadata=item.model_dump(exclude={"result", "status", "type"}),
+                        )
                     )
-                )
-                await context.send(
-                    OpenAIServerToolResultEvent(
-                        parent_id=item.id,
-                        name=IMAGE_GENERATION_TOOL_NAME,
-                        result=ToolResult(),
-                    )
-                )
-                files.append(result)
 
         usage = normalize_responses_usage(response.usage) if response.usage else Usage()
 
@@ -272,61 +221,17 @@ class OpenAIResponsesClient(LLMClient):
                         )
                     )
 
-                elif isinstance(event.item, ResponseFunctionWebSearch):
-                    await context.send(
-                        OpenAIServerToolCallEvent(
-                            id=event.item.id,
-                            name=WEB_SEARCH_TOOL_NAME,
-                            arguments=event.item.action.model_dump_json(),
-                            item=event.item,
+                elif call_event := OpenAIServerToolCallEvent.from_item(event.item):
+                    await context.send(call_event)
+                    if result_event := OpenAIServerToolResultEvent.from_item(event.item, parent_id=call_event.id):
+                        await context.send(result_event)
+                    if isinstance(event.item, ImageGenerationCall) and event.item.result:
+                        files.append(
+                            BinaryResult(
+                                base64.b64decode(event.item.result),
+                                metadata=event.item.model_dump(exclude={"result", "status", "type"}),
+                            )
                         )
-                    )
-                    await context.send(
-                        OpenAIServerToolResultEvent(
-                            parent_id=event.item.id,
-                            name=WEB_SEARCH_TOOL_NAME,
-                            result=ToolResult(),
-                        )
-                    )
-
-                elif isinstance(event.item, ResponseCodeInterpreterToolCall):
-                    await context.send(
-                        OpenAIServerToolCallEvent(
-                            id=event.item.id,
-                            name=CODE_EXECUTION_TOOL_NAME,
-                            arguments=json.dumps({"code": event.item.code}) if event.item.code is not None else "{}",
-                            item=event.item,
-                        )
-                    )
-                    await context.send(
-                        OpenAIServerToolResultEvent(
-                            parent_id=event.item.id,
-                            name=CODE_EXECUTION_TOOL_NAME,
-                            result=ToolResult(),
-                        )
-                    )
-
-                elif isinstance(event.item, ImageGenerationCall) and event.item.result:
-                    result = BinaryResult(
-                        base64.b64decode(event.item.result),
-                        metadata=event.item.model_dump(exclude={"result", "status", "type"}),
-                    )
-                    await context.send(
-                        OpenAIServerToolCallEvent(
-                            id=event.item.id,
-                            name=IMAGE_GENERATION_TOOL_NAME,
-                            arguments="",
-                            item=event.item,
-                        )
-                    )
-                    await context.send(
-                        OpenAIServerToolResultEvent(
-                            parent_id=event.item.id,
-                            name=IMAGE_GENERATION_TOOL_NAME,
-                            result=ToolResult(),
-                        )
-                    )
-                    files.append(result)
 
             elif isinstance(event, ResponseCompletedEvent):
                 # Stream finished
