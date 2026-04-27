@@ -9,7 +9,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from .base import READONLY_COMMANDS, ShellEnvironment, check_ignore, contains_shell_operator, matches
+from .base import READONLY_COMMANDS, ShellEnvironment, check_ignore, validate_command
 
 
 class LocalShellEnvironment(ShellEnvironment):
@@ -96,6 +96,11 @@ class LocalShellEnvironment(ShellEnvironment):
         # readonly=True with no explicit allowed → use built-in read-only list.
         # explicit allowed always takes precedence over readonly.
         self._allowed: list[str] | None = list(READONLY_COMMANDS) if readonly and allowed is None else allowed
+        # Redirections are blocked only in pure read-only mode. When the user
+        # provides an explicit allowed list, we trust their judgement — they
+        # may legitimately want `git log > out.txt` and can pair it with
+        # `ignore=` to keep sensitive paths off-limits.
+        self._forbid_redirects: bool = readonly and allowed is None
         self._blocked = blocked
         self._ignore = ignore
         self._env = env
@@ -116,17 +121,19 @@ class LocalShellEnvironment(ShellEnvironment):
     def run(self, command: str) -> str:
         """Execute *command* and return its output as a string.
 
-        Applies allowed/blocked filtering, ignore-pattern checks, then runs
-        the command via :func:`subprocess.run`.
+        Validates each pipeline/list segment of the command against the
+        allowed/blocked policy via :func:`validate_command`, applies
+        ignore-pattern checks, then runs the command via
+        :func:`subprocess.run`.
         """
-        if self._allowed is not None:
-            if not any(matches(p, command) for p in self._allowed):
-                return f"Command not allowed: {command!r}"
-            if contains_shell_operator(command):
-                return f"Command not allowed (shell operators are not permitted in restricted mode): {command!r}"
-
-        if self._blocked is not None and any(matches(p, command) for p in self._blocked):
-            return f"Command not allowed: {command!r}"
+        rejection = validate_command(
+            command,
+            allowed=self._allowed,
+            blocked=self._blocked,
+            forbid_redirects=self._forbid_redirects,
+        )
+        if rejection is not None:
+            return rejection
 
         if self._ignore is not None:
             denied = check_ignore(command, self._workdir, self._ignore)

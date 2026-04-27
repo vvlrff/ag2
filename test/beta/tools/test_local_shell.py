@@ -13,7 +13,7 @@ from autogen.beta.events import ModelResponse, ToolCallEvent, ToolCallsEvent, To
 from autogen.beta.testing import TestConfig
 from autogen.beta.tools import LocalShellTool
 from autogen.beta.tools.shell import LocalShellEnvironment
-from autogen.beta.tools.shell.environment.base import check_ignore, matches
+from autogen.beta.tools.shell.environment.base import check_ignore, matches, validate_command
 
 
 class TestMatches:
@@ -128,21 +128,15 @@ class TestShellExecution:
 
     @pytest.mark.asyncio
     async def test_allowed_permits_matching_command(self, tmp_path: Path) -> None:
-        shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, allowed=["echo"]))
-        agent = Agent("a", config=self._make_config("echo hello"), tools=[shell])
-        reply = await agent.ask("run it")
-        # Command was allowed — output must contain the echoed text
-        assert "hello" in str(reply)
-
-    @pytest.mark.asyncio
-    async def test_allowed_blocks_shell_redirect_bypass(self, tmp_path: Path) -> None:
         output = tmp_path / "out.txt"
         shell = LocalShellTool(environment=LocalShellEnvironment(path=tmp_path, allowed=["echo"]))
-        # Even though "echo" is allowed, shell redirection (`>`) must be blocked
-        # to prevent bypassing the whitelist by writing to arbitrary files.
+        # `echo` is whitelisted; redirection is allowed when the user provided
+        # an explicit `allowed=` list (read-only redirect blocking only kicks
+        # in for pure `readonly=True` without an explicit allow-list).
         agent = Agent("a", config=self._make_config(f"echo hello > {output}"), tools=[shell])
         await agent.ask("run it")
-        assert not output.exists(), "shell redirect bypass was not blocked"
+        assert output.exists(), "echo was allowed but file was not created"
+        assert output.read_text().strip() == "hello"
 
     @pytest.mark.asyncio
     async def test_allowed_blocks_non_matching_command(self, tmp_path: Path) -> None:
@@ -411,3 +405,135 @@ class TestShellExecution:
         schemas = await shell.schemas(None)  # type: ignore[arg-type]
         description = schemas[0].function.description
         assert str(tmp_path) in description, f"workdir not in description: {description!r}"
+
+
+class TestCommandValidationChain:
+    """Per-segment whitelist validation: pipelines and chain operators."""
+
+    def test_pipe_passes_when_all_segments_allowed(self) -> None:
+        assert (
+            validate_command("git log | grep error", allowed=["git", "grep"], blocked=None, forbid_redirects=False)
+            is None
+        )
+
+    def test_pipe_rejects_when_one_segment_disallowed(self) -> None:
+        result = validate_command("echo a | sh", allowed=["echo"], blocked=None, forbid_redirects=False)
+        assert result is not None
+        assert "sh" in result
+
+    def test_and_chain_passes_when_all_allowed(self) -> None:
+        assert validate_command("cat a && cat b", allowed=["cat"], blocked=None, forbid_redirects=False) is None
+
+    def test_or_chain_passes_when_all_allowed(self) -> None:
+        assert validate_command("cat a || cat b", allowed=["cat"], blocked=None, forbid_redirects=False) is None
+
+    def test_semicolon_chain_passes_when_all_allowed(self) -> None:
+        assert validate_command("echo a; echo b", allowed=["echo"], blocked=None, forbid_redirects=False) is None
+
+    def test_chain_rejects_when_one_segment_disallowed(self) -> None:
+        result = validate_command("echo a; rm b", allowed=["echo"], blocked=None, forbid_redirects=False)
+        assert result is not None
+        assert "rm" in result
+
+    def test_quoted_separator_is_one_segment(self) -> None:
+        # `echo "a; b"` is a single command — the `;` is inside an argument.
+        assert validate_command('echo "a; b"', allowed=["echo"], blocked=None, forbid_redirects=False) is None
+
+    def test_quoted_pipe_is_one_segment(self) -> None:
+        assert validate_command('echo "a | b"', allowed=["echo"], blocked=None, forbid_redirects=False) is None
+
+
+class TestCommandValidationSubstitution:
+    """Substitution and compound constructs are rejected under whitelist."""
+
+    def test_command_substitution_dollar_paren_rejected(self) -> None:
+        result = validate_command("echo $(date)", allowed=["echo"], blocked=None, forbid_redirects=False)
+        assert result is not None
+        assert "command substitution" in result
+
+    def test_command_substitution_backticks_rejected(self) -> None:
+        result = validate_command("echo `date`", allowed=["echo"], blocked=None, forbid_redirects=False)
+        assert result is not None
+        assert "command substitution" in result
+
+    def test_process_substitution_rejected(self) -> None:
+        result = validate_command("cat <(echo x)", allowed=["cat"], blocked=None, forbid_redirects=False)
+        assert result is not None
+        assert "process substitution" in result
+
+    def test_compound_if_rejected(self) -> None:
+        result = validate_command("if true; then echo x; fi", allowed=["echo"], blocked=None, forbid_redirects=False)
+        assert result is not None
+        assert "compound" in result
+
+    def test_substitution_allowed_without_whitelist(self) -> None:
+        # When no allowed list is set, substitution is permitted — restricted
+        # mode is what triggers the check.
+        assert validate_command("echo $(date)", allowed=None, blocked=None, forbid_redirects=False) is None
+
+
+class TestCommandValidationRedirect:
+    """Redirections are blocked only in pure read-only mode."""
+
+    def test_redirect_allowed_when_explicit_allowed(self) -> None:
+        # Explicit allowed=… means the user trusts the whitelist; redirect OK.
+        assert validate_command("echo hi > out.txt", allowed=["echo"], blocked=None, forbid_redirects=False) is None
+
+    def test_redirect_rejected_in_readonly(self) -> None:
+        result = validate_command("cat f > o.txt", allowed=None, blocked=None, forbid_redirects=True)
+        assert result is not None
+        assert "redirection" in result
+
+    def test_input_redirect_rejected_in_readonly(self) -> None:
+        # `<` is also a redirection — read-only mode forbids any redirection
+        # because we cannot statically prove the target isn't a write.
+        result = validate_command("cat < in.txt", allowed=None, blocked=None, forbid_redirects=True)
+        assert result is not None
+        assert "redirection" in result
+
+
+class TestCommandValidationBlocked:
+    """The blocked list applies per-segment, just like allowed."""
+
+    def test_blocked_rejects_segment_inside_chain(self) -> None:
+        result = validate_command("echo a; rm b", allowed=None, blocked=["rm"], forbid_redirects=False)
+        assert result is not None
+        assert "rm" in result
+
+    def test_blocked_does_not_reject_unrelated_chain(self) -> None:
+        assert validate_command("echo a; echo b", allowed=None, blocked=["rm"], forbid_redirects=False) is None
+
+
+class TestCommandValidationParsing:
+    """Malformed bash fails closed; permissive mode is unchanged."""
+
+    def test_malformed_bash_fails_closed_under_whitelist(self) -> None:
+        result = validate_command("echo $(", allowed=["echo"], blocked=None, forbid_redirects=False)
+        assert result is not None
+
+    def test_no_policy_means_permissive(self) -> None:
+        # No allowed, no blocked, no readonly — anything goes.
+        assert validate_command("rm -rf /", allowed=None, blocked=None, forbid_redirects=False) is None
+
+    def test_empty_command_is_permitted(self) -> None:
+        assert validate_command("   ", allowed=["echo"], blocked=None, forbid_redirects=False) is None
+
+
+class TestReadonlyRedirectIntegration:
+    """End-to-end: readonly=True must reject `cat f > out.txt` at run()."""
+
+    def test_readonly_blocks_redirect_via_run(self, tmp_path: Path) -> None:
+        (tmp_path / "src.txt").write_text("payload")
+        env = LocalShellEnvironment(path=tmp_path, readonly=True)
+        result = env.run("cat src.txt > leaked.txt")
+        assert "redirection" in result
+        assert not (tmp_path / "leaked.txt").exists()
+
+    def test_explicit_allowed_overrides_readonly_for_redirect(self, tmp_path: Path) -> None:
+        # When the user pairs readonly=True with an explicit allowed list, the
+        # explicit list wins — redirection is permitted, matching the existing
+        # `test_readonly_overridden_by_explicit_allowed` semantics.
+        env = LocalShellEnvironment(path=tmp_path, readonly=True, allowed=["echo"])
+        result = env.run("echo ok > out.txt")
+        assert "redirection" not in result
+        assert (tmp_path / "out.txt").read_text().strip() == "ok"
