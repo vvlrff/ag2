@@ -144,8 +144,12 @@ class OpenAIResponsesClient(LLMClient):
 
         for item in response.output:
             if isinstance(item, ResponseReasoningItem):
-                text = "\n\n".join(s.text for s in (item.summary or []) if getattr(s, "text", None))
-                await context.send(OpenAIReasoningEvent(text, item=item))
+                summaries = [s.text for s in item.summary if s.text]
+                if not summaries:
+                    await context.send(OpenAIReasoningEvent("", item=item))
+                else:
+                    for text in summaries:
+                        await context.send(OpenAIReasoningEvent(text, item=item))
 
             elif isinstance(item, ResponseOutputMessage):
                 for part in item.content:
@@ -209,8 +213,12 @@ class OpenAIResponsesClient(LLMClient):
                 # before the server-side tool has executed — code/outputs missing).
 
                 if isinstance(event.item, ResponseReasoningItem):
-                    text = "\n\n".join(s.text for s in (event.item.summary or []) if getattr(s, "text", None))
-                    await context.send(OpenAIReasoningEvent(text, item=event.item))
+                    summaries = [s.text for s in event.item.summary if s.text]
+                    if not summaries:
+                        await context.send(OpenAIReasoningEvent("", item=event.item))
+                    else:
+                        for text in summaries:
+                            await context.send(OpenAIReasoningEvent(text, item=event.item))
 
                 elif isinstance(event.item, ResponseFunctionToolCall):
                     calls.append(
