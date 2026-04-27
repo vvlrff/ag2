@@ -2,9 +2,25 @@
 #
 # SPDX-License-Identifier: Apache-2.0
 
+from unittest.mock import Mock
+
 
 class AG2Error(Exception):
     """Base exception for all AG2 beta errors."""
+
+
+class ToolConflictError(AG2Error):
+    def __init__(self, tool_name: str) -> None:
+        super().__init__(f"Could not add tool: `{tool_name}`. Tool with such name already registered.")
+
+
+class ToolResolutionError(AG2Error):
+    """Raised when one or more tools in an AgentSpec cannot be resolved from the available tools pool."""
+
+    def __init__(self, missing: list[str], available: list[str]) -> None:
+        self.missing = missing
+        self.available = available
+        super().__init__(f"Could not resolve tool(s): {missing}. Available: {sorted(available)}")
 
 
 class ToolExecutionError(AG2Error):
@@ -40,7 +56,7 @@ class HumanInputNotProvidedError(AG2Error):
             message
             or (
                 "Human input was requested but not provided. "
-                "Please set it for agent using `Agent(..., hitl_hook=func)` or `@agent.hitl_hook`."
+                "Please set it for actor using `Actor(..., hitl_hook=func)` or `@actor.hitl_hook`."
             )
         )
 
@@ -51,7 +67,7 @@ class ConfigNotProvidedError(AG2Error):
     def __init__(self, message: str | None = None) -> None:
         super().__init__(
             message
-            or "No model config provided. Set config on the `Agent(config=...)` creation or pass it to call `ask(config=...)`."
+            or "No model config provided. Set config on the `Actor(config=...)` creation or pass it to call `ask(config=...)`."
         )
 
 
@@ -77,3 +93,12 @@ class SkillDownloadError(SkillError):
 
 class SkillInstallError(SkillError):
     """Raised when a downloaded skill archive cannot be extracted or validated."""
+
+
+def missing_optional_dependency(name: str, extra: str, error: ImportError) -> Mock:
+    def _raise(*args: object, **kwargs: object) -> None:
+        raise ImportError(
+            f'{name} requires optional dependencies. Install with `pip install "ag2[{extra}]"`'
+        ) from error
+
+    return Mock(side_effect=_raise)
