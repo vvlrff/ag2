@@ -34,7 +34,7 @@ from autogen.beta.tools.builtin.code_execution import CodeExecutionToolSchema
 from autogen.beta.tools.builtin.skills import SkillsToolSchema
 from autogen.beta.tools.schemas import ToolSchema
 
-from .events import AnthropicServerToolCallEvent, AnthropicServerToolResultEvent
+from .events import AnthropicServerToolCallEvent, AnthropicServerToolResultBlockType, AnthropicServerToolResultEvent
 from .mappers import (
     convert_messages,
     extract_mcp_servers,
@@ -192,8 +192,9 @@ class AnthropicClient(LLMClient):
             if isinstance(block, ServerToolUseBlock):
                 if call_event := AnthropicServerToolCallEvent.from_block(block):
                     await context.send(call_event)
-            elif (result_event := AnthropicServerToolResultEvent.from_block(block)) is not None:
-                await context.send(result_event)
+            elif isinstance(block, AnthropicServerToolResultBlockType):
+                if result_event := AnthropicServerToolResultEvent.from_block(block):
+                    await context.send(result_event)
 
     def _build_system(self, prompt: Iterable[str]) -> Any:
         text = "\n".join(prompt)
@@ -242,8 +243,9 @@ class AnthropicClient(LLMClient):
                 if call_event := AnthropicServerToolCallEvent.from_block(block):
                     await context.send(call_event)
 
-            elif (result_event := AnthropicServerToolResultEvent.from_block(block)) is not None:
-                await context.send(result_event)
+            elif isinstance(block, AnthropicServerToolResultBlockType):
+                if result_event := AnthropicServerToolResultEvent.from_block(block):
+                    await context.send(result_event)
 
         usage = normalize_usage(response.usage.model_dump() if response.usage else {})
 
@@ -281,8 +283,9 @@ class AnthropicClient(LLMClient):
                 elif block_type == "server_tool_use":
                     if call_event := AnthropicServerToolCallEvent.from_block(block):
                         await context.send(call_event)
-                elif (result_event := AnthropicServerToolResultEvent.from_block(block)) is not None:
-                    await context.send(result_event)
+                elif isinstance(block, AnthropicServerToolResultBlockType):
+                    if result_event := AnthropicServerToolResultEvent.from_block(block):
+                        await context.send(result_event)
 
             elif event_type == "content_block_delta":
                 delta = event.delta
