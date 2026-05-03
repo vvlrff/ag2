@@ -19,6 +19,7 @@ from .builtin import (
     WebFetchTool,
     WebSearchTool,
 )
+from .code import SandboxCodeTool
 from .final import Toolkit, tool
 from .search import DuckDuckSearchTool, ExaToolkit, PerplexitySearchToolkit, TavilySearchTool
 from .shell import LocalShellTool
@@ -38,6 +39,7 @@ __all__ = (
     "MemoryTool",
     "NetworkPolicy",
     "PerplexitySearchToolkit",
+    "SandboxCodeTool",
     "ShellTool",
     "Skill",
     "SkillSearchToolkit",
