@@ -376,8 +376,15 @@ class TestRedisStream:
 
         task = stream._listener_task
         task.cancel()
-        with pytest.raises(asyncio.CancelledError):
-            await task
+        # Wait for the listener task itself to settle. A plain ``await task``
+        # can be interrupted by an unrelated cancellation delivered to the
+        # *test* coroutine under full-suite event-loop load — that would leave
+        # the listener still pending and make ``task.cancelled()`` flakily
+        # False. Looping on ``asyncio.wait`` asserts the listener's own final
+        # state, which is what "cancellation propagated" actually means.
+        while not task.done():
+            with contextlib.suppress(asyncio.CancelledError):
+                await asyncio.wait({task})
         assert task.cancelled()
 
     async def test_local_dispatch_survives_listener_failure(self, redis_stream):
